@@ -1,0 +1,135 @@
+.screenplay-page-editor {
+  min-width: 0;
+  width: 100%;
+  container-type: inline-size;
+}
+
+.screenplay-page-help,
+.screenplay-page-feedback {
+  margin: 0 0 0.65rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.screenplay-page-feedback { color: hsl(var(--foreground)); }
+
+.screenplay-page-scroll {
+  max-height: min(76vh, 1050px);
+  min-height: 32rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1.75rem max(1rem, 3%);
+  background: #e4e2dc;
+  border: 1px solid #c9c7c0;
+  border-radius: 0.2rem;
+  scrollbar-gutter: stable;
+}
+
+.screenplay-paper {
+  --screenplay-zoom: 1;
+  box-sizing: border-box;
+  width: calc(8.5in * var(--screenplay-zoom));
+  max-width: 100%;
+  min-height: calc(11in * var(--screenplay-zoom));
+  margin: 0 auto;
+  padding: calc(0.95in * var(--screenplay-zoom)) calc(0.9in * var(--screenplay-zoom)) calc(1.1in * var(--screenplay-zoom)) calc(1.25in * var(--screenplay-zoom));
+  background: #fffefa;
+  color: #242322;
+  box-shadow: 0 1px 5px #2321191c;
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+  font-size: calc(12pt * var(--screenplay-zoom));
+  line-height: 1.25;
+  font-weight: 400;
+  font-variant-ligatures: none;
+  text-align: left;
+}
+
+.screenplay-page-line {
+  position: relative;
+  min-height: 1.25em;
+  margin: 0;
+  padding: 0;
+}
+
+.screenplay-page-line--character { margin-left: 37%; width: 59%; text-transform: uppercase; }
+.screenplay-page-line--dialogue { margin-left: 19%; width: 60%; }
+.screenplay-page-line--parenthetical { margin-left: 28%; width: 46%; }
+.screenplay-page-line--scene_heading { font-weight: 700; text-transform: uppercase; }
+.screenplay-page-line--transition { margin-left: 37%; width: 63%; text-align: right; text-transform: uppercase; }
+.screenplay-page-line--other { color: #645f56; }
+
+.screenplay-page-readline,
+.screenplay-page-line textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 1.25em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  tab-size: 4;
+}
+
+.screenplay-page-readline { cursor: text; }
+.screenplay-page-readline:hover { background: #c6bba019; }
+.screenplay-page-line textarea { resize: none; overflow: hidden; outline: none; caret-color: #242322; }
+.screenplay-page-line textarea:focus { background: #f3efdf85; box-shadow: -3px 0 0 #9b7e3e; }
+.screenplay-page-line textarea:disabled { cursor: default; }
+.screenplay-page-line ::selection { background: #c9dbee; }
+
+.screenplay-suggestions {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 100%;
+  max-width: 30rem;
+  padding: 0.25rem;
+  border: 1px solid #c9c1ae;
+  border-radius: 0.25rem;
+  background: #fffefa;
+  box-shadow: 0 4px 14px #29221520;
+  color: #242322;
+  font: 0.8rem/1.4 system-ui, sans-serif;
+  text-align: left;
+  text-transform: none;
+}
+
+.screenplay-suggestions [role='option'] { padding: 0.45rem 0.6rem; cursor: pointer; overflow-wrap: anywhere; }
+.screenplay-suggestions [role='option']:hover,
+.screenplay-suggestions .is-selected { background: #ede7d8; }
+.screenplay-suggestions-help { display: block; padding: 0.3rem 0.6rem; color: #726b5e; font-size: 0.7rem; }
+
+@container (max-width: 900px) {
+  .screenplay-page-scroll { padding: 0.75rem; min-height: 28rem; }
+  .screenplay-paper { padding: 0.75in 0.4in 1in 0.65in; }
+}
+
+@container (max-width: 560px) {
+  .screenplay-page-scroll { padding: 0.5rem; }
+  .screenplay-paper { padding: 2.5rem 1.25rem 4rem; }
+  .screenplay-page-line--character { margin-left: 34%; width: 66%; }
+  .screenplay-page-line--dialogue { margin-left: 12%; width: 76%; }
+  .screenplay-page-line--parenthetical { margin-left: 23%; width: 58%; }
+  .screenplay-suggestions { max-width: 100%; width: 100%; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .screenplay-page-readline { transition: background-color 90ms ease; }
+}
+
+/* Revision marks: an asterisk in the right margin for lines changed since the chosen revision. */
+.screenplay-page-line.is-revised::after { content: '*'; position: absolute; right: -1.4em; top: 0; color: #9b2f2f; font-weight: 700; }

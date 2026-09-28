@@ -1,0 +1,18 @@
+{
+  "source": "QiMovi / FilmStack local contract snapshot",
+  "purpose": "Pinned QiMovi participation contract, shared by writer browser and service. Keep data schema identical. Writer identity and references are handled by a separate adapter.",
+  "files": [
+    {
+      "path": "project-participation.mjs",
+      "sha256": "7ca9e7c6bb7cdcfc9d7bdb95c93d833e0107af16803a6e2ebc9e8e914d17d80e"
+    },
+    {
+      "path": "project-participation.d.mts",
+      "sha256": "eb7f93f7c27c1131d08b95052a7d838f37bcc4498f0557ba7b5a0f9f1586e760"
+    },
+    {
+      "path": "creative-project.mjs",
+      "sha256": "85d4ae459a2b7d293f6618f1bcd92aded9e0c551430022ba26c54aa240857891"
+    }
+  ]
+}

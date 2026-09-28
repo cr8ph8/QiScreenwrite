@@ -1,0 +1,369 @@
+{
+  "schema": "caniscreenwrite-filmcraft-catalog/v1",
+  "updatedOn": "2026-09-28",
+  "sources": [],
+  "entries": [
+    {
+      "id": "story:scene",
+      "title": "Scene",
+      "category": "story",
+      "kind": "term",
+      "definition": "Action unfolding within a particular stretch of story time and space.",
+      "application": "Give each scene a concrete change.",
+      "prompt": "What is different when this scene ends?",
+      "aliases": [
+        "dramatic scene"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Basic Terms",
+          "url": "https://filmanalysis.yale.edu/basic-terms/"
+        }
+      ]
+    },
+    {
+      "id": "story:sequence",
+      "title": "Sequence",
+      "category": "story",
+      "kind": "term",
+      "definition": "Connected scenes or shots that form a larger dramatic unit.",
+      "application": "Outline the unit before polishing individual scenes.",
+      "prompt": "What question holds these scenes together?",
+      "aliases": [
+        "dramatic sequence"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Basic Terms",
+          "url": "https://filmanalysis.yale.edu/basic-terms/"
+        }
+      ]
+    },
+    {
+      "id": "image:mise-en-scene",
+      "title": "Mise-en-scène",
+      "category": "image",
+      "kind": "term",
+      "definition": "The arrangement of the visible world before the camera: setting, performers, costume, lighting and objects.",
+      "application": "Choose details that reveal your world through action.",
+      "prompt": "Which prop changes meaning when another character touches it?",
+      "aliases": [
+        "mise en scene",
+        "staging"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Basic Terms",
+          "url": "https://filmanalysis.yale.edu/basic-terms/"
+        }
+      ]
+    },
+    {
+      "id": "story:character",
+      "title": "Character and action",
+      "category": "story",
+      "kind": "practice",
+      "definition": "A writing exercise: reveal a character through observable choices within a scene.",
+      "application": "Put an intention under pressure; describe the resulting behavior.",
+      "prompt": "What does this person do when the easy choice disappears?",
+      "aliases": [
+        "character motivation"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Basic Terms",
+          "url": "https://filmanalysis.yale.edu/basic-terms/"
+        }
+      ]
+    },
+    {
+      "id": "image:framing",
+      "title": "Framing",
+      "category": "image",
+      "kind": "term",
+      "definition": "The selection and arrangement of what appears within the image boundary.",
+      "application": "Describe essential visual information economically.",
+      "prompt": "What could remain outside the frame until the reveal?",
+      "aliases": [
+        "composition"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Cinematography",
+          "url": "https://filmanalysis.yale.edu/cinematography/"
+        }
+      ]
+    },
+    {
+      "id": "camera:closeup",
+      "title": "Close-up",
+      "category": "camera",
+      "kind": "term",
+      "definition": "A tight view that emphasizes a face or another detail.",
+      "application": "Reserve emphasis for information the audience needs.",
+      "prompt": "Which small gesture carries the scene?",
+      "aliases": [
+        "close up",
+        "CU"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Cinematography",
+          "url": "https://filmanalysis.yale.edu/cinematography/"
+        }
+      ]
+    },
+    {
+      "id": "camera:depth-of-field",
+      "title": "Depth of field",
+      "category": "camera",
+      "kind": "technical",
+      "definition": "The distance range that appears acceptably sharp in an image.",
+      "application": "Decide which planes of action need readable detail.",
+      "prompt": "Should the background action be noticed immediately?",
+      "aliases": [
+        "focus",
+        "deep focus",
+        "shallow focus"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Cinematography",
+          "url": "https://filmanalysis.yale.edu/cinematography/"
+        }
+      ]
+    },
+    {
+      "id": "camera:pan",
+      "title": "Pan",
+      "category": "camera",
+      "kind": "term",
+      "definition": "Horizontal rotation of a camera from its position.",
+      "application": "Use movement to reveal a relationship between subjects.",
+      "prompt": "What new information appears at the end of the pan?",
+      "aliases": [
+        "camera pan"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Cinematography",
+          "url": "https://filmanalysis.yale.edu/cinematography/"
+        }
+      ]
+    },
+    {
+      "id": "camera:tracking",
+      "title": "Tracking shot",
+      "category": "camera",
+      "kind": "term",
+      "definition": "A shot made while the camera travels through space.",
+      "application": "Consider whose movement the viewpoint follows.",
+      "prompt": "What changes when the camera follows rather than waits?",
+      "aliases": [
+        "dolly shot"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Cinematography",
+          "url": "https://filmanalysis.yale.edu/cinematography/"
+        }
+      ]
+    },
+    {
+      "id": "editing:continuity",
+      "title": "Continuity editing",
+      "category": "editing",
+      "kind": "practice",
+      "definition": "Shot organization that helps viewers follow space, time and action across cuts.",
+      "application": "Track positions and actions when revising a sequence.",
+      "prompt": "Can a viewer tell where everyone is after the cut?",
+      "aliases": [
+        "continuity"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Editing",
+          "url": "https://filmanalysis.yale.edu/editing/"
+        }
+      ]
+    },
+    {
+      "id": "editing:crosscut",
+      "title": "Crosscutting",
+      "category": "editing",
+      "kind": "term",
+      "definition": "Alternating between separate lines of action.",
+      "application": "Make the relationship between the actions intentional.",
+      "prompt": "Does the alternation imply simultaneity, contrast or a coming meeting?",
+      "aliases": [
+        "cross cutting",
+        "parallel editing"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Editing",
+          "url": "https://filmanalysis.yale.edu/editing/"
+        }
+      ]
+    },
+    {
+      "id": "editing:eyeline",
+      "title": "Eyeline match",
+      "category": "editing",
+      "kind": "term",
+      "definition": "An edit linking a look with the object or space being looked toward.",
+      "application": "Distinguish what a character notices from what the audience knows.",
+      "prompt": "How would delaying the reverse view change the scene?",
+      "aliases": [
+        "eyeline"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Editing",
+          "url": "https://filmanalysis.yale.edu/editing/"
+        }
+      ]
+    },
+    {
+      "id": "editing:montage",
+      "title": "Montage",
+      "category": "editing",
+      "kind": "term",
+      "definition": "The assembly of shots; also a sequence that compresses time or builds meaning through juxtaposition.",
+      "application": "Specify the progression rather than a list of attractive images.",
+      "prompt": "What develops across these shots?",
+      "aliases": [
+        "montage sequence"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Editing",
+          "url": "https://filmanalysis.yale.edu/editing/"
+        }
+      ]
+    },
+    {
+      "id": "sound:diegetic",
+      "title": "Diegetic sound",
+      "category": "sound",
+      "kind": "term",
+      "definition": "Sound belonging to the represented story world, whether its source is visible or offscreen.",
+      "application": "Name a sound source when it matters to the action.",
+      "prompt": "Who can hear the noise, and who cannot?",
+      "aliases": [
+        "story-world sound"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Sound",
+          "url": "https://filmanalysis.yale.edu/sound/"
+        }
+      ]
+    },
+    {
+      "id": "sound:nondiegetic",
+      "title": "Nondiegetic sound",
+      "category": "sound",
+      "kind": "term",
+      "definition": "Sound presented outside the story world, such as an external musical score.",
+      "application": "Keep audience information distinct from character knowledge.",
+      "prompt": "Would this moment read differently without the score?",
+      "aliases": [
+        "non-diegetic sound"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Sound",
+          "url": "https://filmanalysis.yale.edu/sound/"
+        }
+      ]
+    },
+    {
+      "id": "sound:bridge",
+      "title": "Sound bridge",
+      "category": "sound",
+      "kind": "term",
+      "definition": "Audio that connects a transition between scenes or shots.",
+      "application": "Use a recurring sound to establish a deliberate connection.",
+      "prompt": "What sound begins before its new location is shown?",
+      "aliases": [
+        "audio bridge"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Sound",
+          "url": "https://filmanalysis.yale.edu/sound/"
+        }
+      ]
+    },
+    {
+      "id": "sound:offscreen",
+      "title": "Offscreen sound",
+      "category": "sound",
+      "kind": "term",
+      "definition": "Sound whose source is outside the current frame.",
+      "application": "Let sound expand a location beyond what is visible.",
+      "prompt": "What unseen activity changes the meaning of this room?",
+      "aliases": [
+        "off-screen sound"
+      ],
+      "caveats": [
+        "The application and prompt are optional writing exercises, not production rules."
+      ],
+      "sources": [
+        {
+          "title": "Further reading: Yale Film Analysis — Sound",
+          "url": "https://filmanalysis.yale.edu/sound/"
+        }
+      ]
+    }
+  ]
+}

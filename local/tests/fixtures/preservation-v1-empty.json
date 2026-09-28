@@ -1,0 +1,28 @@
+{
+  "schema": "caniscreenwrite-preservation-package/v1",
+  "scope": "SAVED_WRITER_WORKSPACE",
+  "createdAt": "2026-09-27T17:53:14.777Z",
+  "sourceSha256": "22f67b76bfb6b1118281bcb9d878ed57d0876bb0e0d492aaa42f43c5fe231552",
+  "inventory": [],
+  "exclusions": [
+    "Unsaved screenplay and development recovery content, including pending saves.",
+    "Credentials, sessions, connector configuration and request replay receipts.",
+    "Remote media and other external files; this is not a media archive.",
+    "Remote authority, acceptance, publication and production state; saved links are local receipts only."
+  ],
+  "readme": "# Saved writer workspace preservation\n\nScope: SAVED_WRITER_WORKSPACE. This JSON package contains the exact saved project and complete saved record history in backup, plus an inventory of the latest revision of each record.\nScreenplays, story development, shared worlds and local transfer receipts retain their record IDs, versions and SHA-256 hashes. Linked worlds retain their saved base revisions.\n\nExclusions:\n- Unsaved screenplay and development recovery content, including pending saves.\n- Credentials, sessions, connector configuration and request replay receipts.\n- Remote media and other external files; this is not a media archive.\n- Remote authority, acceptance, publication and production state; saved links are local receipts only.\n\nVerify without opening a workspace: node local/server/cli.mjs verify-preservation --file PACKAGE.json\nRestore to a new, nonexistent directory: node local/server/cli.mjs restore --data NEW_DIR --file PACKAGE.json\nRestore refuses every existing destination, preserves saved history and creates a fresh local credential. Reconnect external services separately.\n\nsourceSha256 binds the exact project and sorted saved revision identities. Export timestamps are excluded; timestamps within saved record content remain bound by record hashes.\nThe package digest uses length-framed canonical metadata and backup.sha256. Verification recomputes record hashes, history, local source bindings and package integrity.\nThese unkeyed hashes do not prove cryptographic authenticity, authorship, canon, remote authority or a scientific quotient. A self-consistent rewritten package can pass verification.\nOnly the supplied snapshot is checked. Verification cannot prove that omitted independent records existed elsewhere, or inspect excluded recovery or remote content.\nThe complete JSON package is limited to 128 MiB; existing backup and record limits also apply.\n",
+  "backup": {
+    "schema": "caniscreenwrite-local-writer-backup/v1",
+    "createdAt": "2026-09-27T17:53:14.777Z",
+    "project": {
+      "id": "local-writer:7656b7b1-be62-411c-afbb-97b5c6019dcf",
+      "profile": "caniscreenwrite-local-writer/v1",
+      "sourceHash": null,
+      "sourceStatus": "NO_SOURCE",
+      "title": "Synthetic legacy preservation fixture"
+    },
+    "records": [],
+    "sha256": "9752903567e908a888aaac8c68114e554b76abcc6a94cbfc29d56e9df2dde66d"
+  },
+  "sha256": "45d3048759b0331cb0e517c9e355b62ea7ce2e7f78a38b167620dfc6ea2f165a"
+}

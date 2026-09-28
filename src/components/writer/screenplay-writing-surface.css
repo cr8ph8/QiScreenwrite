@@ -1,0 +1,26 @@
+.screenplay-writing-surface { min-width: 0; }
+.screenplay-writing-surface .screenplay-writing-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; min-height: 42px; padding: 0 0 12px; }
+.screenplay-writing-surface .screenplay-writing-toolbar button { border: 0; border-radius: 3px; background: transparent; color: #bdb5a8; padding: 6px 9px; font: 11px/1.4 system-ui,sans-serif; cursor: pointer; }
+.screenplay-writing-surface .screenplay-writing-toolbar button:disabled { opacity: .35; cursor: default; }
+.screenplay-writing-surface .screenplay-writing-modes { display: flex; padding: 2px; border: 1px solid #4b483f; border-radius: 5px; }
+.screenplay-writing-surface .screenplay-writing-modes button[aria-pressed=true] { color: #211e18; background: #d7bd8e; }
+.screenplay-writing-surface .screenplay-writing-toolbar label { display: flex; align-items: center; gap: 7px; margin: 0; font: 10px/1.4 system-ui,sans-serif; color: #bdb5a8; }
+.screenplay-writing-surface .screenplay-writing-toolbar select { width: auto; margin: 0; padding: 6px; border: 1px solid #4b483f; border-radius: 3px; color: #e5ddce; background: #23231f; font: 11px/1.4 system-ui,sans-serif; }
+.screenplay-writing-surface .screenplay-history-controls { display: flex; gap: 1px; }
+.screenplay-writing-surface .screenplay-insert-menu { position: relative; margin-left: auto; font-size: 11px; }
+.screenplay-writing-surface .screenplay-insert-menu summary { cursor: pointer; color: #cbbb9e; padding: 7px; }
+.screenplay-writing-surface .screenplay-insert-menu>div { position: absolute; right: 0; top: 100%; z-index: 5; display: grid; min-width: 130px; background: #26251f; padding: 6px; border: 1px solid #4b483f; box-shadow: 0 6px 20px #0006; }
+.screenplay-writing-surface .screenplay-insert-menu>div button { text-align: left; }
+.screenplay-writing-surface .screenplay-writing-toolbar button:focus-visible,.screenplay-writing-surface summary:focus-visible,.screenplay-writing-surface select:focus-visible { outline: 2px solid #d7bd8e; outline-offset: 2px; }
+.screenplay-writing-surface .screenplay-source-editor { background: #1c1d19; color: #e6dfd0; }
+.screenplay-writing-surface .screenplay-source-editor>textarea { height: clamp(440px,calc(100dvh - 330px),820px); caret-color: #e6dfd0; }
+.screenplay-writing-surface .screenplay-source-editor>pre,.screenplay-writing-surface .screenplay-source-editor>textarea { padding: 20px; font: 13px/24px 'Courier New',monospace; }
+.screenplay-writing-surface .screenplay-writing-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; color: #b2a998; font: 10px/1.6 system-ui,sans-serif; }
+.screenplay-writing-surface .screenplay-writing-footer b { font-weight: normal; color: #6f6b60; padding: 0 4px; }
+.screenplay-writing-surface .screenplay-writing-footer details { max-width: 290px; text-align: right; }
+.screenplay-writing-surface .screenplay-writing-footer details p { text-align: left; margin-top: 8px; }
+.screenplay-writing-surface .screenplay-writing-feedback { font-size: 11px; color: #e6c594; }
+.screenplay-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+@media(max-width:650px) { .screenplay-writing-surface .screenplay-writing-toolbar { gap: 7px; } .screenplay-writing-surface .screenplay-element-control>span { display: none; } .screenplay-writing-surface .screenplay-writing-footer>span { max-width: 220px; } }
+/* Instructions stay available to assistive technology and in Writing help. */
+.screenplay-writing-surface .screenplay-page-help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

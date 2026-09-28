@@ -1,0 +1,183 @@
+/* Fonts loaded asynchronously via index.html */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 4%;
+    --foreground: 40 20% 92%;
+
+    --card: 220 18% 8%;
+    --card-foreground: 40 20% 92%;
+
+    --popover: 220 18% 8%;
+    --popover-foreground: 40 20% 92%;
+
+    --primary: 42 78% 55%;
+    --primary-foreground: 220 20% 4%;
+
+    --secondary: 220 14% 14%;
+    --secondary-foreground: 40 15% 80%;
+
+    --muted: 220 14% 12%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 42 60% 40%;
+    --accent-foreground: 40 20% 95%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 16%;
+    --input: 220 14% 16%;
+    --ring: 42 78% 55%;
+
+    --radius: 0.5rem;
+
+    --gold: 42 78% 55%;
+    --gold-dim: 42 40% 30%;
+    --gold-glow: 42 90% 65%;
+    --surface-elevated: 220 16% 10%;
+    --surface-overlay: 220 18% 6%;
+
+    /* Qi Authorship Shield — premium legal-tech accents */
+    --shield-crimson: 354 72% 42%;
+    --shield-crimson-deep: 354 80% 28%;
+    --shield-crimson-glow: 354 85% 55%;
+    --shield-maple: 18 78% 48%;
+    --shield-ivory: 40 30% 94%;
+
+    --cinema-gradient: linear-gradient(135deg, hsl(220 20% 4%) 0%, hsl(230 18% 8%) 50%, hsl(220 20% 4%) 100%);
+    --gold-gradient: linear-gradient(135deg, hsl(42 78% 55%) 0%, hsl(38 85% 45%) 100%);
+    --gold-text-gradient: linear-gradient(135deg, hsl(42 90% 65%), hsl(42 78% 55%), hsl(38 70% 45%));
+    --shield-gradient: linear-gradient(135deg, hsl(354 80% 28%) 0%, hsl(354 72% 42%) 50%, hsl(42 78% 55%) 100%);
+    --shield-text-gradient: linear-gradient(135deg, hsl(354 85% 55%), hsl(42 90% 65%));
+    --glow-gold: 0 0 40px hsl(42 78% 55% / 0.15);
+    --glow-gold-strong: 0 0 60px hsl(42 78% 55% / 0.25);
+    --glow-shield: 0 0 50px hsl(354 72% 42% / 0.25);
+
+    --sidebar-background: 220 18% 6%;
+    --sidebar-foreground: 40 15% 80%;
+    --sidebar-primary: 42 78% 55%;
+    --sidebar-primary-foreground: 220 20% 4%;
+    --sidebar-accent: 220 14% 14%;
+    --sidebar-accent-foreground: 40 15% 80%;
+    --sidebar-border: 220 14% 16%;
+    --sidebar-ring: 42 78% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Playfair Display', serif;
+  }
+  .font-body {
+    font-family: 'Inter', sans-serif;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .text-gradient-gold {
+    background: var(--gold-text-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .bg-cinema {
+    background: var(--cinema-gradient);
+  }
+  .bg-gold-gradient {
+    background: var(--gold-gradient);
+  }
+  .glow-gold {
+    box-shadow: var(--glow-gold);
+  }
+  .glow-gold-strong {
+    box-shadow: var(--glow-gold-strong);
+  }
+  .border-gold-dim {
+    border-color: hsl(var(--gold-dim));
+  }
+  .bg-surface-elevated {
+    background-color: hsl(var(--surface-elevated));
+  }
+  .bg-surface-overlay {
+    background-color: hsl(var(--surface-overlay));
+  }
+  .text-gradient-shield {
+    background: var(--shield-text-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .bg-shield-gradient {
+    background: var(--shield-gradient);
+  }
+  .glow-shield {
+    box-shadow: var(--glow-shield);
+  }
+  .border-shield {
+    border-color: hsl(var(--shield-crimson) / 0.4);
+  }
+  .text-shield {
+    color: hsl(var(--shield-crimson-glow));
+  }
+}
+
+@keyframes shimmer-gold {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-shimmer-gold {
+  background-size: 200% auto;
+  animation: shimmer-gold 3s linear infinite;
+}
+
+@keyframes pipeline-pulse {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+.pipeline-dot {
+  animation: pipeline-pulse 2s ease-in-out infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

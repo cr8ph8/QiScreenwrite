@@ -1,3 +1,4 @@
+import { BrandPlanningPanel } from './BrandPlanningPanel';
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { BarChart3, BookOpen, Download, Eye, FileText, Globe2, History, LayoutGrid, Lightbulb, Maximize2, Minimize2, PanelRight, PenLine, Save, Search, X } from "lucide-react";
@@ -471,6 +472,7 @@ export function WriterDesk({ project, open, records, onSaved, onRecordsChanged, 
             <TabsTrigger value="preview"><Eye aria-hidden="true" />Preview</TabsTrigger>
             <TabsTrigger value="cards"><LayoutGrid aria-hidden="true" />Cards</TabsTrigger>
             <TabsTrigger value="reports"><BarChart3 aria-hidden="true" />Reports</TabsTrigger>
+            <TabsTrigger value="brands"><BarChart3 aria-hidden="true" />Brands & financing</TabsTrigger>
             <TabsTrigger value="services"><Lightbulb aria-hidden="true" />Scoring & profiles</TabsTrigger>
             <TabsTrigger value="history" aria-label="History"><History aria-hidden="true" />History{saved ? <span className="lw-mode-count" aria-hidden="true">{saved.version}</span> : null}</TabsTrigger>
           </TabsList>
@@ -495,6 +497,9 @@ export function WriterDesk({ project, open, records, onSaved, onRecordsChanged, 
           </TabsContent>
           <TabsContent value="history" className="flex-1 min-h-0 overflow-auto p-3">
             <HistoryPanel draftId={open.id} saved={saved} currentBody={fields.body} onRestore={(body) => { setBody(body); toast.message("Restored into the editor. Save to keep it as a new revision."); }} />
+          </TabsContent>
+          <TabsContent value="brands" className="flex-1 min-h-0 overflow-auto p-3" forceMount hidden={tab !== 'brands'}>
+            <BrandPlanningPanel key={open.id} draft={saved} dirty={dirty} active={active && tab === 'brands'} onSaved={onSaved}/>
           </TabsContent>
           <TabsContent value="services" className="flex-1 min-h-0 overflow-auto p-3" forceMount hidden={tab !== 'services'}>
             {tab === 'services' && <CreativeServicesPanel draft={saved} dirty={dirty} />}

@@ -127,7 +127,7 @@ it("does not load the online client just by visiting Connect", async () => {
 it("keeps the web-style modes and makes a narrow workspace's inspector optional", async () => {
   render(<WriterDesk {...props()} />); await act(async () => {});
   const modes = screen.getByRole('tablist', { name: 'Workspace modes' });
-  expect(within(modes).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Write', 'Develop', 'World Builder', 'Film language', 'Preview', 'Cards', 'Reports', 'Scoring & profiles', 'History1']);
+  expect(within(modes).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Write', 'Develop', 'World Builder', 'Film language', 'Preview', 'Cards', 'Reports', 'Brands & financing', 'Scoring & profiles', 'History1']);
   expect(screen.queryByRole('button', { name: 'Film language' })).toBeNull();
   const toggle = screen.getByRole('button', { name: 'Inspector' });
   expect(toggle).toHaveAttribute('aria-expanded', 'false');

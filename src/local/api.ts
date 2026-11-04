@@ -14,6 +14,12 @@ export class LocalApiError extends Error {
 }
 
 const MESSAGES: Record<string, string> = {
+  BRAND_SOURCE_CHANGED: 'The saved draft changed. Scan and review the new revision before continuing.',
+  BRAND_TRANSFER_REQUIRED: 'Transfer this saved revision through Connect → QiMovi before reading financing.',
+  BRAND_TRANSFER_DIVERGED: 'The connected draft or project differs from the last transfer. Review the connection and transfer before continuing.',
+  BRAND_CONTEXT_UNVERIFIED: 'The financing response could not be verified against this exact revision.',
+  BRAND_SOURCE_TOO_LARGE: 'The placement scanner supports saved screenplays up to 800,000 UTF-8 bytes.',
+
   ANALYSIS_ENDPOINT_INVALID: 'Use Ollama on this Mac, for example http://127.0.0.1:11434. External hosts and redirects are not accepted here.',
   ANALYSIS_MODEL_UNAVAILABLE: 'Ollama did not answer. Start your local Ollama service, check its address, then refresh installed models.',
   ANALYSIS_LOCAL_MODEL_REQUIRED: 'Choose an installed local model. Remote and cloud-backed models cannot use the local route.',

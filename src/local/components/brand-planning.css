@@ -1,0 +1,11 @@
+.lw-brand-planning { max-width: 70rem; margin: 0 auto; padding: 1rem; }
+.lw-brand-planning h2 { font-size: 1.4rem; font-weight: 650; }
+.lw-brand-planning h3 { margin-top: 1rem; font-weight: 600; }
+.lw-brand-planning p { margin: .65rem 0; line-height: 1.5; }
+.lw-brand-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: .8rem 0; }
+.lw-brand-planning button { border: 1px solid currentColor; border-radius: .5rem; padding: .45rem .75rem; }
+.lw-brand-planning button:disabled { opacity: .45; cursor: not-allowed; }
+.lw-brand-planning article { border: 1px solid #8886; border-radius: .6rem; padding: 1rem; margin: 1rem 0; }
+.lw-brand-planning label { display: grid; gap: .5rem; }
+.lw-brand-planning input { border: 1px solid #8888; border-radius: .4rem; padding: .6rem; background: transparent; }
+.lw-brand-planning blockquote { border-left: 3px solid #8888; padding: .6rem; white-space: pre-wrap; overflow-wrap: anywhere; }

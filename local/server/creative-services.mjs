@@ -41,7 +41,8 @@ async function readResponse(response) {
 
 /** Reports and request receipts are private files, never authored screenplay records. */
 export class CreativeServices {
-  constructor(directory, store, { fetcher = fetch, timeoutMs = 120000 } = {}) {
+  constructor(directory, store, { fetcher = fetch, timeoutMs = 120000, resourceJournal = null } = {}) {
+    this.resourceJournal = resourceJournal;
     this.directory = privateDirectory(path.join(directory, 'creative-analysis'));
     this.store = store; this.fetcher = fetcher; this.timeoutMs = timeoutMs; this.active = false;
     for (const job of this.list()) if (job.status === 'running') {
@@ -123,8 +124,9 @@ export class CreativeServices {
       const modelContext = details.model_info[`${details.model_info['general.architecture']}.context_length`];
       check(Number.isSafeInteger(modelContext) && context <= Math.min(modelContext, 65536), 'ANALYSIS_CONTEXT_TOO_SMALL', 422);
       job = this.write({ id: request.requestId.toLowerCase(), createdAt: new Date().toISOString(), input: request.input, endpoint, model: request.model, fingerprint, status: 'running', report: null, error: null });
-      const result = await this.call(endpoint, '/api/chat', { model: request.model, messages, format: outputSchema(request.input.kind), stream: false, think: false,
+      const invoke = () => this.call(endpoint, '/api/chat', { model: request.model, messages, format: outputSchema(request.input.kind), stream: false, think: false,
         options: { temperature: 0.2, num_predict: 4096, num_ctx: context } }, this.timeoutMs);
+      const result = this.resourceJournal ? await this.resourceJournal.measure({ id: job.id, provider: 'OLLAMA', model: request.model, taskId: job.id, local: true, requestHash: fingerprint }, invoke) : await invoke();
       const absentOrEmpty = value => value === undefined || Array.isArray(value) && value.length === 0;
       check(result.model === request.model && !remoteMetadata(result) && result.done === true && result.done_reason === 'stop'
         && result.message?.role === 'assistant' && absentOrEmpty(result.message.tool_calls) && absentOrEmpty(result.message.images)

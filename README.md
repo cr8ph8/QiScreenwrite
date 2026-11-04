@@ -106,3 +106,9 @@ financial ledger. See [the workflow, installation and authority boundaries](docs
 
 The feature workflow validates the local app and produces a development macOS
 arm64 bundle. It does not install itself on your computer or update the iPhone app.
+
+## Costs, tokens and resource accounting
+
+The authenticated desktop/local-browser shell includes **Costs · money, tokens & resources**. It combines the existing budget/financing observations with a private activity and local-model usage journal. Failed or rejected model results retain available usage; unknown is never silently zero. Owner-supplied rate versions support estimates without executing work. Money, provider credits, tokens, time and energy remain distinct units.
+
+QiScreenwrite can explicitly read linked QiMovi project costs after a saved screenplay transfer, without copying its financial ledger. Physical electricity remains unmetered; global spending caps and external billing reconciliation are not implemented. **Export the resource journal separately from creative backups.** See [coverage, assumptions and safety boundaries](docs/RESOURCE-ACCOUNTING.md).

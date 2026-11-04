@@ -66,7 +66,8 @@ test('real local apps exchange source-bound financing context without granting f
   await command('sign', { dealId: 'deal:paired', confirmed: true, evidence: 'PRIVATE_CONTRACT_REFERENCE' });
   const read = await w('/api/brands/qimovi-context', 'POST', { draftId: local.id });
   assert.equal(read.status, 200, JSON.stringify(read.data)); assert.equal(read.data.readOnly, true); assert.equal(read.data.approvalGranted, false);
-  assert.equal(read.data.deals[0].sponsor, 'Synthetic sponsor'); assert.equal(read.data.totals[0].signedCash, '40.00');
+  assert.equal(read.data.deals[0].sponsor, 'Synthetic sponsor'); assert.equal(read.data.totals[0].signedCash, '40');
+  assert.deepEqual(read.data.totals, ledger.totals, 'the writer reads canonical project totals without reformatting or recomputing money');
   assert.equal(JSON.stringify(read.data).includes('PRIVATE_CONTRACT_REFERENCE'), false);
   assert.equal(read.data.events, undefined); assert.equal(read.data.totalsScope, 'PROJECT_NOT_DRAFT');
   const still = (await w('/api/bootstrap')).data.records.find(row => row.id === local.id);

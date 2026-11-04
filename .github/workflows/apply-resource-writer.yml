@@ -1,0 +1,67 @@
+name: Apply reviewed writer resource source
+on:
+  push:
+    branches: [feat/resource-cost-accounting]
+    paths: ['.github/workflows/apply-resource-writer.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'cr8ph8/QiScreenwrite' && github.ref == 'refs/heads/feat/resource-cost-accounting'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: cr8ph8/QiMovi
+          ref: c55996245545d17ad18df34caa68c5ecde64ef31
+          path: .shared-qimovi
+          persist-credentials: false
+      - name: Apply exact reviewed source, no other files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, base64, lzma, hashlib, subprocess, os
+          patch = lzma.decompress(base64.b64decode(pathlib.Path('.github/resource-writer-patch.b64').read_text(), validate=True))
+          assert len(patch) == 24885
+          assert hashlib.sha256(patch).hexdigest() == '01f4aa7fbc9aee8b31bd480f7a69e041ddd4ea79df2592f57ba287ad2246522b'
+          target = pathlib.Path(os.environ['RUNNER_TEMP']) / 'writer-resource.patch'
+          target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply','--index',str(target)],check=True)
+          own = {'README.md','local/server/creative-services.mjs','local/server/http.mjs','local/server/resource-accounting.mjs','local/tests/brand-cross-app.test.mjs','local/tests/cli-portability.test.mjs','local/tests/resource-http.test.mjs','scripts/package-desktop.mjs','src/local/LocalApp.tsx'}
+          assert set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()) == own
+          copies = {
+            'docs/RESOURCE-ACCOUNTING.md': ('docs/RESOURCE-ACCOUNTING.md','f917abe017daf5cb9f69fe39df76bd3f7dc51621c4331564b856be243c75501e'),
+            'local/accounting/resource-math.mjs': ('local/accounting/resource-math.mjs','a1968252ad67458802cf410f09e71880ef62ef7b39e17d6fc84b057bf7561130'),
+            'local/accounting/resource-journal.mjs': ('local/accounting/resource-journal.mjs','8a4d6049ad85486c3655526c2980e2bfd67db13de3e43a160a3343b132f4b23b'),
+            'local/accounting/resource-view.mjs': ('local/accounting/resource-view.mjs','0ec707fe8c35dcc2dbb76d3d7641a50bc2dc77638f87976ba5edfaba34a82a72'),
+            'src/accounting/ResourceCostDock.tsx': ('src/accounting/ResourceCostDock.tsx','0a519bc7a89b832441870dd0a2d6a5deb24107b9be5f19e7d110f7244e9243f2'),
+            'src/accounting/resource-cost.css': ('src/accounting/resource-cost.css','259959ec0790734a8bdd3a4928db3fcfc68b70723e8d2b57fa29d8f0165a1b54'),
+            'src/accounting/ResourceCostDock.test.tsx': ('tests/resource-ui.test.tsx','171bab25989296d1f923ab47ebcafb5ba10d80b41837b4a2235afc04a40d0355'),
+            'local/tests/resource-accounting.test.mjs': ('tests/resource-accounting.test.mjs','db3ba6949c11eb8bdaae60b8f0f1055ec3e5d6b3337b00287176b8edd0094443')
+          }
+          for dest, (source, expected) in copies.items():
+            data = pathlib.Path('.shared-qimovi',source).read_text()
+            if dest.endswith('ResourceCostDock.test.tsx'):
+              data = data.replace('../src/accounting/ResourceCostDock','./ResourceCostDock')
+            if dest.endswith('resource-accounting.test.mjs'):
+              data = data.replace('../local/accounting/','../accounting/')
+            raw = data.encode('utf-8')
+            assert hashlib.sha256(raw).hexdigest() == expected, dest
+            p = pathlib.Path(dest)
+            assert not p.exists(), dest
+            p.parent.mkdir(parents=True,exist_ok=True)
+            p.write_bytes(raw)
+          subprocess.run(['git','add','--',*copies.keys()],check=True)
+          assert set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()) == own | set(copies)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add app-wide writer cost accounting and shared local usage metering'
+          git push origin HEAD:refs/heads/feat/resource-cost-accounting

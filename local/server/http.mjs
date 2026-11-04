@@ -1,3 +1,5 @@
+import { openResourceJournal } from '../accounting/resource-journal.mjs';
+import { resourceSnapshot } from './resource-accounting.mjs';
 import { scanWriterBrands } from './brand-planning.mjs';
 // Loopback HTTP service for the local writer. Binds 127.0.0.1 only. Serves the
 // built local app and a small JSON API over one private SQLite workspace.
@@ -53,7 +55,7 @@ const constantEqual = (left, right) => typeof left === 'string' && typeof right 
 export async function startServer({ directory, port = 0, dist = null, loginNonce = null, sessionLifetimeMs = 12 * 60 * 60 * 1000, bridge, analysisOptions } = {}) {
   directory = privateDirectory(directory);
   const unlock = acquireLock(directory);
-  let store;
+  let store, resourceJournal;
   try {
     const config = loadConfig(directory);
     store = new WorkspaceStore(directory, validateRecord);
@@ -61,7 +63,8 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
     const recovery = new RecoveryStore(store);
     const developmentRecovery = new DevelopmentRecoveryStore(store);
     const rightsRecovery = new RightsRecoveryStore(store);
-    const creativeServices = new CreativeServices(directory, store, analysisOptions);
+    resourceJournal = openResourceJournal(directory, 'qiscreenwrite', store.project().id);
+    const creativeServices = new CreativeServices(directory, store, { ...analysisOptions, resourceJournal });
     const qimovi = bridge ?? new QiMoviBridge(directory);
     const qimoviLibrary = new QiMoviLibrary(qimovi, store);
     const sessions = new Map();
@@ -101,6 +104,22 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
           const token = req.headers.cookie?.split(';').map(s => s.trim()).find(s => s.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
           check(token && (sessions.get(sha256(token)) ?? 0) > Date.now(), 'OWNER_SESSION_REQUIRED', 401);
           if (url.pathname === '/api/session' && req.method === 'DELETE') { sessions.clear(); return json(res, 200, { authenticated: false }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` }); }
+          resourceJournal.observeRequest(req, res, url.pathname);
+          if (url.pathname === '/api/resource-accounting' || url.pathname.startsWith('/api/resource-accounting/')) {
+            check([...url.searchParams].length === 0, 'RESOURCE_QUERY_REJECTED', 422);
+            try {
+              if (url.pathname === '/api/resource-accounting' && req.method === 'GET') return json(res, 200, resourceSnapshot(resourceJournal, creativeServices));
+              if (url.pathname === '/api/resource-accounting/export' && req.method === 'GET') return json(res, 200, resourceJournal.export(), { 'Content-Disposition': 'attachment; filename="private-resource-journal.json"' });
+              if (req.method === 'POST') {
+                const input = await body(req, 32768);
+                check(input && Object.keys(input).sort().join(',') === 'data,projectId' && input.projectId === store.project().id, 'RESOURCE_PROJECT_MISMATCH', 409);
+                if (url.pathname === '/api/resource-accounting/rate') return json(res, 200, resourceJournal.setRate(input.data));
+                if (url.pathname === '/api/resource-accounting/entry') return json(res, 200, resourceJournal.record(input.data));
+                if (url.pathname === '/api/resource-accounting/quote') return json(res, 200, resourceJournal.quote(input.data));
+              }
+              throw new LocalError('RESOURCE_ROUTE_NOT_FOUND', 404);
+            } catch (e) { throw new LocalError(/^RESOURCE_[A-Z_]+$/.test(e.code ?? '') ? e.code : 'RESOURCE_UNAVAILABLE', [404,409,413,422].includes(e.status) ? e.status : 503); }
+          }
           if (url.pathname === '/api/bootstrap' && req.method === 'GET') return json(res, 200, { project: store.project(), records: store.list(), connectors: { qimovi: qimovi.status() } });
           if (url.pathname === '/api/brands/scan' && req.method === 'POST') {
             check([...url.searchParams].length === 0, 'BRAND_QUERY_REJECTED', 422);
@@ -236,8 +255,8 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
       origin: expectedOrigin,
       loginUrl: loginNonce ? `${expectedOrigin}/#login=${loginNonce}` : null,
       close() {
-        return closePromise ??= new Promise((resolve, reject) => { server.close(() => { try { store.close(); resolve(); } catch (error) { reject(error); } finally { unlock(); } }); server.closeIdleConnections(); });
+        return closePromise ??= new Promise((resolve, reject) => { server.close(() => { try { resourceJournal.close(); store.close(); resolve(); } catch (error) { reject(error); } finally { unlock(); } }); server.closeIdleConnections(); });
       },
     };
-  } catch (error) { try { store?.close(); } finally { unlock(); } throw error; }
+  } catch (error) { try { resourceJournal?.close(); store?.close(); } finally { unlock(); } throw error; }
 }

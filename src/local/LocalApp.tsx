@@ -1,10 +1,11 @@
+import ResourceCostDock from '../accounting/ResourceCostDock';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { BookOpen, ChevronDown, HardDrive, Layers, LayoutTemplate, Link2, PenLine, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { localApi, LocalApiError, SESSION_LOST_EVENT } from "./api";
+import { localApi, LocalApiError, SESSION_LOST_EVENT, request } from "./api";
 import { DRAFT_KIND, TEMPLATES, buildDraftData, isDraft, newDraftId, sortDrafts, type RecoveryCopy } from "./model";
 import type { Bootstrap, DraftRecord, WorkspaceRecord } from "./types";
 import type { OpenDraft } from "./components/WriterDesk";
@@ -17,6 +18,7 @@ const CompetitionPanel = lazy(() => import("./components/CompetitionPanel").then
 const WriterDesk = lazy(() => import("./components/WriterDesk").then(module => ({ default: module.WriterDesk })));
 const PreservationPanel = lazy(() => import('./components/PreservationPanel').then(module => ({ default: module.PreservationPanel })));
 const RightsPanel = lazy(() => import('./components/RightsPanel').then(module => ({ default: module.RightsPanel })));
+const resourceRequest = <T,>(path: string, data?: unknown): Promise<T> => request<T>(path, data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) });
 type StudioView = "drafts" | "templates" | "knowledge" | "connections" | "write" | "preservation" | "rights";
 type RecoveryHost = Window & { __localWriterDirty?: boolean; __flushWriterRecovery?: () => Promise<void>; __flushDevelopmentRecovery?: () => Promise<void>; __flushRightsRecovery?: () => Promise<void> };
 
@@ -197,6 +199,7 @@ export default function LocalApp() {
   const { project } = phase.bootstrap;
   return (
     <div className="lw-shell">
+      <ResourceCostDock key={project.id} projectId={project.id} app="qiscreenwrite" draftId={open?.saved?.id} draftVersion={open?.saved?.version} draftSha256={open?.saved?.sha256} transport={resourceRequest}/>
       <header className="lw-studio-header">
         <button className="lw-brand" onClick={() => showView("drafts")} aria-label="QiCanIScreenwrite home"><img src="/qicaniscreenwrite-mark.svg" alt="" width={38} height={38} /><span>QiCanIScreenwrite<small>QUOTIENT INTELLIGENT</small></span></button>
         <nav className="lw-studio-nav" aria-label="Studio">

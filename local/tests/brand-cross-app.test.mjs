@@ -21,6 +21,10 @@ test('real local apps exchange source-bound financing context without granting f
     assert.equal(fs.readFileSync(new URL(`../contracts/${filename}`, import.meta.url), 'utf8'),
       fs.readFileSync(path.resolve(moviRoot, 'local/contracts', filename), 'utf8'), `${filename}: shared contracts must stay byte-identical`);
   }
+  for (const filename of ['resource-math.mjs', 'resource-journal.mjs', 'resource-view.mjs']) {
+    assert.equal(fs.readFileSync(new URL(`../accounting/${filename}`, import.meta.url), 'utf8'),
+      fs.readFileSync(path.resolve(moviRoot, 'local/accounting', filename), 'utf8'), `${filename}: accounting contracts must stay byte-identical`);
+  }
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qibrand-paired-'));
   const filmDir = path.join(root, 'film'), writerDir = path.join(root, 'writer');
   createCreativeProject(filmDir, 'Synthetic cross-app placement'); initialize(writerDir);
@@ -69,11 +73,21 @@ test('real local apps exchange source-bound financing context without granting f
   assert.equal(read.data.deals[0].sponsor, 'Synthetic sponsor'); assert.equal(read.data.totals[0].signedCash, '40');
   assert.deepEqual(read.data.totals, ledger.totals, 'the writer reads canonical project totals without reformatting or recomputing money');
   assert.equal(JSON.stringify(read.data).includes('PRIVATE_CONTRACT_REFERENCE'), false);
+  assert.equal(read.data.costContext.schema, 'qi-resource-context/v1');
+  assert.equal(read.data.costContext.scope, 'PROJECT_NOT_DRAFT');
+  assert.equal(read.data.costContext.projectId, fp.id);
+  assert.equal(read.data.costContext.readOnly, true);
+  assert.deepEqual(read.data.costContext.financing.totals, ledger.totals);
+  assert.equal(read.data.costContext.entries, undefined);
+  assert.equal(read.data.costContext.rates, undefined);
+  assert.equal(read.data.costContext.events, undefined);
   assert.equal(read.data.events, undefined); assert.equal(read.data.totalsScope, 'PROJECT_NOT_DRAFT');
   const still = (await w('/api/bootstrap')).data.records.find(row => row.id === local.id);
   assert.equal(still.sha256, local.sha256); assert.equal(still.version, local.version);
   const session = await bridge('/api/caniscreenwrite/session', 'POST', { token: moviConfig(filmDir).ownerToken });
   assert.ok(session.data.capabilities.includes('brand-context/v1'));
+  assert.equal((await bridge('/api/resource-accounting')).status, 403);
+  assert.equal((await bridge('/api/resource-accounting/entry', 'POST', {})).status, 403);
   assert.equal((await bridge('/api/brand-financing')).status, 403);
   assert.equal((await bridge('/api/brand-financing/command', 'POST', {})).status, 403);
   const edit = await w('/api/records/' + local.id, 'PUT', { ...input, expectedVersion: 1, requestId: crypto.randomUUID(), data: { ...input.data, body: input.data.body + '\nThe story changes.\n' } });

@@ -1,0 +1,33 @@
+name: Local writer checks
+on:
+  push:
+    branches: [main, feat/local-brand-integration]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: local-writer-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar.gz HEAD > source-snapshot.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-snapshot-${{ github.sha }}
+          path: source-snapshot.tar.gz
+          retention-days: 3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:local
+      - run: npm run build

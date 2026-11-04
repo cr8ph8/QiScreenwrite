@@ -30,4 +30,45 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run test:local
+      - uses: actions/checkout@v4
+        with:
+          repository: cr8ph8/QiMovi
+          ref: 9cd05d7bcd707ba1e9eec3a203e02c269284f8ad
+          path: .paired-qimovi
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+      - run: cd .paired-qimovi && bun install --frozen-lockfile
+      - name: Verify real paired local services
+        run: QIMOVI_SOURCE_DIR="$PWD/.paired-qimovi" node --test local/tests/brand-cross-app.test.mjs
       - run: npm run build
+  macos-package:
+    needs: validate
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+      - run: npm ci
+      - run: npm run desktop:build
+      - name: Verify packaged integration and preserve source identity
+        run: |
+          APP="$(node -p "JSON.parse(require('node:fs').readFileSync('build-desktop/latest.json','utf8')).app")"
+          codesign --verify --deep --strict "$APP"
+          test -f "$APP/Contents/Resources/runtime/local/server/brand-planning.mjs"
+          test -f "$APP/Contents/Resources/runtime/local/contracts/brand-scanner.mjs"
+          mkdir -p "$RUNNER_TEMP/writer-package" build-artifacts
+          ditto "$APP" "$RUNNER_TEMP/writer-package/QiCanIScreenwrite.app"
+          printf 'Source commit: %s\nArchitecture: arm64\nDevelopment ad-hoc signature; not notarized. No private workspace included.\n' "$(git rev-parse HEAD)" > build-artifacts/BUILD.txt
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/writer-package/QiCanIScreenwrite.app" build-artifacts/QiScreenwrite-macOS-arm64.zip
+          shasum -a 256 build-artifacts/QiScreenwrite-macOS-arm64.zip > build-artifacts/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QiScreenwrite-macOS-arm64-${{ github.sha }}
+          path: build-artifacts/
+          retention-days: 14

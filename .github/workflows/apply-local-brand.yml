@@ -1,0 +1,52 @@
+name: Apply reviewed local brand integration
+on:
+  push:
+    branches: [feat/local-brand-integration]
+    paths: ['.github/local-brand-*.b64', '.github/workflows/apply-local-brand.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'cr8ph8/QiScreenwrite' && github.ref == 'refs/heads/feat/local-brand-integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/checkout@v4
+        with:
+          repository: cr8ph8/QiMovi
+          ref: 9cd05d7bcd707ba1e9eec3a203e02c269284f8ad
+          path: .paired-qimovi
+          persist-credentials: false
+      - name: Verify and apply source patch to feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, base64, lzma, hashlib, subprocess, os
+          encoded = ''.join(pathlib.Path(f'.github/local-brand-{i}.b64').read_text() for i in range(4))
+          patch = lzma.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == 54761
+          assert hashlib.sha256(patch).hexdigest() == '558892cfdba244960409402c53e0c706351713ff009a7238aa9e0a1633c8021a'
+          expected = {'README.md','docs/BRAND-INTEGRATION.md','local/server/brand-planning.mjs','local/server/contracts.mjs','local/server/http.mjs','local/server/qimovi.mjs','local/tests/brand-cross-app.test.mjs','local/tests/brand-planning.test.mjs','src/local/api.ts','src/local/brand-planning.ts','src/local/components/BrandPlanningPanel.test.tsx','src/local/components/BrandPlanningPanel.tsx','src/local/components/WriterDesk.tsx','src/local/components/brand-planning.css','local/contracts/brand-scanner.mjs','local/contracts/screenplay-index.mjs'}
+          target = pathlib.Path(os.environ['RUNNER_TEMP']) / 'writer-brand.patch'
+          target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply','--index','--whitespace=fix',str(target)],check=True)
+          shared = {'brand-scanner.mjs':'fe7a35e4a5151484f48af90c8f0aa5a9b52dc719bd207a50dafca4acd9d978a3','screenplay-index.mjs':'811d3f465989e6ee05b3014953ed1f040d8bdb795445f7553e8d09fc73a0af26'}
+          for name, digest in shared.items():
+              raw = pathlib.Path('.paired-qimovi/local/contracts', name).read_bytes()
+              assert hashlib.sha256(raw).hexdigest() == digest, name
+              dest = pathlib.Path('local/contracts', name)
+              assert not dest.exists(), name
+              dest.write_bytes(raw)
+              subprocess.run(['git','add','--',str(dest)],check=True)
+          assert set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()) == expected
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add offline brand planning and source-bound QiMovi financing context'
+          git push origin HEAD:refs/heads/feat/local-brand-integration

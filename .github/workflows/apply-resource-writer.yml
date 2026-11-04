@@ -37,7 +37,7 @@ jobs:
           assert set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()) == own
           copies = {
             'docs/RESOURCE-ACCOUNTING.md': ('docs/RESOURCE-ACCOUNTING.md','f917abe017daf5cb9f69fe39df76bd3f7dc51621c4331564b856be243c75501e'),
-            'local/accounting/resource-math.mjs': ('local/accounting/resource-math.mjs','a1968252ad67458802cf410f09e71880ef62ef7b39e17d6fc84b057bf7561130'),
+            'local/accounting/resource-math.mjs': ('local/accounting/resource-math.mjs','650e01cccb6d8b33b26baa2533a7eae27f72add9b50222afd37dc39d12f71aa0'),
             'local/accounting/resource-journal.mjs': ('local/accounting/resource-journal.mjs','8a4d6049ad85486c3655526c2980e2bfd67db13de3e43a160a3343b132f4b23b'),
             'local/accounting/resource-view.mjs': ('local/accounting/resource-view.mjs','0ec707fe8c35dcc2dbb76d3d7641a50bc2dc77638f87976ba5edfaba34a82a72'),
             'src/accounting/ResourceCostDock.tsx': ('src/accounting/ResourceCostDock.tsx','0a519bc7a89b832441870dd0a2d6a5deb24107b9be5f19e7d110f7244e9243f2'),

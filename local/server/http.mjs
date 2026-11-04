@@ -1,3 +1,4 @@
+import { scanWriterBrands } from './brand-planning.mjs';
 // Loopback HTTP service for the local writer. Binds 127.0.0.1 only. Serves the
 // built local app and a small JSON API over one private SQLite workspace.
 //
@@ -101,6 +102,15 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
           check(token && (sessions.get(sha256(token)) ?? 0) > Date.now(), 'OWNER_SESSION_REQUIRED', 401);
           if (url.pathname === '/api/session' && req.method === 'DELETE') { sessions.clear(); return json(res, 200, { authenticated: false }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` }); }
           if (url.pathname === '/api/bootstrap' && req.method === 'GET') return json(res, 200, { project: store.project(), records: store.list(), connectors: { qimovi: qimovi.status() } });
+          if (url.pathname === '/api/brands/scan' && req.method === 'POST') {
+            check([...url.searchParams].length === 0, 'BRAND_QUERY_REJECTED', 422);
+            return json(res, 200, scanWriterBrands(store, await body(req, 4096)));
+          }
+          if (url.pathname === '/api/brands/qimovi-context' && req.method === 'POST') {
+            const input = await body(req, 4096);
+            check([...url.searchParams].length === 0 && input && Object.keys(input).join(',') === 'draftId', 'BRAND_CONTEXT_INVALID', 422);
+            return json(res, 200, await qimovi.brandContext(store, input.draftId));
+          }
           if (url.pathname === '/api/creative-services/models' && req.method === 'POST') return json(res, 200, await creativeServices.models(await body(req, 1024)));
           if (url.pathname === '/api/creative-services/local' && req.method === 'POST') return json(res, 200, await creativeServices.run(await body(req, 80000)));
           if (url.pathname === '/api/creative-services/jobs' && req.method === 'GET') {

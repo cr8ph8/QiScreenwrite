@@ -190,6 +190,36 @@ export class QiMoviBridge {
   async ensureConnected() {
     if (!this.cookie) await this.signIn();
   }
+  /** Read a minimal financing context for the exact transferred saved revision.
+   * No owner-session escalation, financial writes, or implicit screenplay push. */
+  async brandContext(store, draftId) {
+    check(typeof draftId === 'string' && draftId.startsWith('screenplay-draft:') && ID.test(draftId), 'BRAND_DRAFT_INVALID', 422);
+    const local = store.current(draftId), link = store.current(`sync-link:qimovi:${suffix(draftId)}`)?.data;
+    check(local?.kind === 'screenplay-draft' && local.sha256 === sha256(canonicalJson(local.data)), 'BRAND_DRAFT_INVALID', 409);
+    check(link?.draftVersion === local.version && link.draftSha256 === local.sha256, 'BRAND_TRANSFER_REQUIRED', 409,
+      'Transfer this saved revision using Connect → QiMovi before reading its financing context.');
+    await this.refreshInstalled(); await this.ensureConnected();
+    check(this.capabilities.includes('brand-context/v1'), 'QIMOVI_BRIDGE_UPDATE_REQUIRED', 409, upgradeMessage);
+    await this.bootstrap();
+    const binding = canonicalJson(this.config()), project = this.remote.project;
+    const remote = this.remote.records.find(row => row.id === link.remote.recordId);
+    check(project.id === link.remote.projectId && this.config().origin === link.remote.origin
+      && remote?.kind === 'screenplay-draft' && remote.version === link.remote.version && remote.sha256 === link.remote.sha256
+      && remote.sha256 === sha256(canonicalJson(remote.data)) && remote.data.body === local.data.body, 'BRAND_TRANSFER_DIVERGED', 409);
+    const { data } = await this.request('/api/caniscreenwrite/brand-context', { method: 'POST',
+      body: { projectId: project.id, sourceId: remote.id, sourceHash: sha256(local.data.body) }, maxBytes: 1024 * 1024 });
+    check(data?.schemaVersion === 'qimovi-brand-context/v1' && data.projectId === project.id
+      && data.source?.id === remote.id && data.source.sourceHash === sha256(local.data.body)
+      && data.source.recordRef?.version === remote.version && data.source.recordRef.sha256 === remote.sha256
+      && data.source.fingerprint === sha256(canonicalJson({ id: remote.id, version: remote.version, sha256: remote.sha256 }))
+      && data.readOnly === true && data.approvalGranted === false && data.externalVerification === false
+      && data.authority === 'OWNER_RECORDED_PLANNING_ONLY' && data.totalsScope === 'PROJECT_NOT_DRAFT'
+      && [data.reviews, data.deals, data.totals].every(Array.isArray), 'BRAND_CONTEXT_UNVERIFIED', 502);
+    const current = store.current(draftId), currentLink = store.current(`sync-link:qimovi:${suffix(draftId)}`)?.data;
+    check(current?.version === local.version && current.sha256 === local.sha256 && canonicalJson(currentLink) === canonicalJson(link)
+      && canonicalJson(this.config()) === binding, 'BRAND_SOURCE_CHANGED', 409);
+    return { ...data, draftId, draftVersion: local.version, draftSha256: local.sha256 };
+  }
   async previewWorldReturn(store, draftId) { return previewWorldReturn(this, store, draftId); }
   async pullWorldReturn(store, draftId, token, choices) { return pullWorldReturn(this, store, draftId, token, choices); }
   async universePlan(store, draftId) {

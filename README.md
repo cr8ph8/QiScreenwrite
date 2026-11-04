@@ -96,3 +96,13 @@ swift test --package-path iphone/Core
 Cross-app integration checks requiring a separate QiMovi installation are optional and must be distinguished from portable tests. Native app interaction and packaging checks are separate from a green web build. See [the roadmap](docs/ROADMAP.md) for the remaining release work.
 
 A [GitHub Actions workflow example](docs/github-actions-ci.yml.example) is included. Automation is not enabled in this initial upload; an authorized maintainer can copy it to `.github/workflows/ci.yml`.
+
+## Local brand integration
+
+Open a saved draft → **Brands & financing** to scan and review placement
+opportunities offline. **Read linked financing** uses an explicit prior draft
+transfer to the updated local QiMovi service; it never signs deals or copies the
+financial ledger. See [the workflow, installation and authority boundaries](docs/BRAND-INTEGRATION.md).
+
+The feature workflow validates the local app and produces a development macOS
+arm64 bundle. It does not install itself on your computer or update the iPhone app.

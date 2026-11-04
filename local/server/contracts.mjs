@@ -1,3 +1,4 @@
+import { validateBrandReview } from './brand-planning.mjs';
 // Record contracts for the local writer workspace.
 //
 // `screenplay-draft` deliberately matches the QiMovi / FilmStack creative
@@ -71,6 +72,7 @@ export function validateSyncLink(data, project, context = {}) {
 export function validateRecord(kind, data, project, context = {}) {
   if (validateSourceImport(kind, data, project, context)) return data;
   if (validateRightsRecord(kind, data, project, context)) return data;
+  if (kind === 'brand-review') return validateBrandReview(data, project, context);
   if (kind === 'screenplay-draft') return validateScreenplayDraft(data, project);
   if (kind === 'story-development') return validateDevelopment(data, project, context);
   if (kind === 'sync-link') return validateSyncLink(data, project, context);

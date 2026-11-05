@@ -59,16 +59,17 @@ jobs:
           /usr/bin/open -n -a "$FILM" --args --project "$ROOT/film"
           /usr/bin/open -n -a "$WRITER" --args --workspace "$ROOT/writer"
           for attempt in {1..60}; do
-            if grep -F 'QiMovieSlate:' "$LOG" | grep -Fq 'Local owner session opened' &&
-               grep -F 'QiCanIScreenwrite:' "$LOG" | grep -Fq 'Local owner session opened'; then
+            if grep -F 'QiMovieSlate[' "$LOG" | grep -Fq 'Local owner session opened' &&
+               grep -F 'QiCanIScreenwrite[' "$LOG" | grep -Fq 'Local owner session opened'; then
               break
             fi
             sleep 1
           done
-          grep -F 'QiMovieSlate:' "$LOG" | grep -F 'Local owner session opened'
-          grep -F 'QiCanIScreenwrite:' "$LOG" | grep -F 'Local owner session opened'
-          FILM_PID="$(pgrep -x QiMovieSlate)"
-          WRITER_PID="$(pgrep -x QiCanIScreenwrite)"
+          grep -F 'QiMovieSlate[' "$LOG" | grep -F 'Local owner session opened'
+          grep -F 'QiCanIScreenwrite[' "$LOG" | grep -F 'Local owner session opened'
+          FILM_PID="$(sed -nE 's/.*QiMovieSlate\[([0-9]+):.*Local owner session opened.*/\1/p' "$LOG" | tail -1)"
+          WRITER_PID="$(sed -nE 's/.*QiCanIScreenwrite\[([0-9]+):.*Local owner session opened.*/\1/p' "$LOG" | tail -1)"
+          kill -0 "$FILM_PID" "$WRITER_PID"
           test -f "$ROOT/film/config.json"
           test -f "$ROOT/writer/config.json"
           cat > "$ROOT/check-windows.swift" <<'SWIFT'

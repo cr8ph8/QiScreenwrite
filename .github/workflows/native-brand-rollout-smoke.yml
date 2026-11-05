@@ -1,4 +1,4 @@
-name: Native brand rollout smoke
+name: Native Brand rollout with dependency fixes
 on:
   push:
     branches: [codex/native-brand-rollout-verification]
@@ -11,13 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 7454293600ca133f3fe5b482ea818ad3e6757dc2
+          ref: fa355c012714680a342b1b1583ae3a5aeff3f5e4
           path: writer
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: cr8ph8/QiMovi
-          ref: 9ce22d27125c0c0892cb57c59ef581db3aff4c71
+          ref: b624d9fb9f6a57475e2dd13825793ecb6bcde43d
           path: film
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -31,6 +31,12 @@ jobs:
         run: |
           (cd writer && npm ci && npm run desktop:build)
           (cd film && bun install --frozen-lockfile && QI_STAGE_DIRECTORY="$RUNNER_TEMP/qi-native-stage" bash script/build_and_run.sh --stage-only)
+          WRITER="$(cd writer && node -p "require('./build-desktop/latest.json').app")"
+          ditto "$WRITER" "$RUNNER_TEMP/qi-native-stage/QiCanIScreenwrite.app"
+          for src in writer film; do
+            (cd "$src" && test "$(node -p "require('./node_modules/dompurify/package.json').version")" = 3.4.17)
+          done
+          (cd film && test "$(node -p "require('./node_modules/proxy-addr/package.json').version")" = 2.0.8 && test ! -e node_modules/tinypool/package.json)
       - name: Launch both native bundles using disposable workspaces
         shell: bash
         run: |
@@ -39,7 +45,7 @@ jobs:
           ROOT="$(mktemp -d "$RUNNER_TEMP/qi-native-smoke.XXXXXX")"
           LOG="$ROOT/launch.log"
           FILM="$RUNNER_TEMP/qi-native-stage/QiMovi.app"
-          WRITER="$(cd writer && node -p "require('./build-desktop/latest.json').app")"
+          WRITER="$RUNNER_TEMP/qi-native-stage/QiCanIScreenwrite.app"
           for app in "$FILM" "$WRITER"; do
             codesign --verify --deep --strict "$app"
             "$app/Contents/Resources/node" --input-type=module -e 'await import(process.argv[1]);' "file://$app/Contents/Resources/runtime/local/server/http.mjs"
@@ -89,23 +95,35 @@ jobs:
           print("Both native application windows are visible.")
           SWIFT
           swift "$ROOT/check-windows.swift" "$FILM_PID" "$WRITER_PID"
-      - name: Publish the verified main-source bundles
+      - name: Exercise the paired feature against packaged runtime code
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(mktemp -d "$RUNNER_TEMP/qi-packaged-test.XXXXXX")"
+          FILM="$RUNNER_TEMP/qi-native-stage/QiMovi.app"
+          WRITER="$RUNNER_TEMP/qi-native-stage/QiCanIScreenwrite.app"
+          ditto "$WRITER/Contents/Resources/runtime" "$ROOT/writer-runtime"
+          mkdir -p "$ROOT/writer-runtime/local/tests"
+          cp writer/local/tests/brand-cross-app.test.mjs "$ROOT/writer-runtime/local/tests/"
+          QIMOVI_SOURCE_DIR="$FILM/Contents/Resources/runtime" "$WRITER/Contents/Resources/node" \
+            --test "$ROOT/writer-runtime/local/tests/brand-cross-app.test.mjs"
+      - name: Publish the tested development bundles
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          WRITER="$(cd writer && node -p "require('./build-desktop/latest.json').app")"
+          WRITER="$RUNNER_TEMP/qi-native-stage/QiCanIScreenwrite.app"
           ditto -c -k --sequesterRsrc --keepParent "$WRITER" artifacts/QiScreenwrite-macOS-arm64.zip
           ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/qi-native-stage/QiMovi.app" artifacts/QiMovi-macOS-arm64.zip
           {
             git -C writer log -1 --format='QiScreenwrite source: %H%nQiScreenwrite tree: %T'
             git -C film log -1 --format='QiMovi source: %H%nQiMovi tree: %T'
-            printf '%s\n' 'Development ad-hoc signatures. Native launch, window presence and local owner session checked on the macOS runner.'
+            printf '%s\n' 'Development ad-hoc signatures. Native windows, local owner sessions and the packaged two-service integration test passed on macOS.'
           } > artifacts/BUILD.txt
           (cd artifacts && shasum -a 256 ./*.zip > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         with:
-          name: qi-brand-native-main-arm64
+          name: qi-brand-native-dependency-fixes-arm64
           path: artifacts/
           retention-days: 14
           if-no-files-found: error

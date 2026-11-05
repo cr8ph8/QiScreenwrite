@@ -1,0 +1,110 @@
+name: Native brand rollout smoke
+on:
+  push:
+    branches: [codex/native-brand-rollout-verification]
+permissions:
+  contents: read
+jobs:
+  launch:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7454293600ca133f3fe5b482ea818ad3e6757dc2
+          path: writer
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: cr8ph8/QiMovi
+          ref: 9ce22d27125c0c0892cb57c59ef581db3aff4c71
+          path: film
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+      - name: Build and stage both development bundles
+        shell: bash
+        run: |
+          (cd writer && npm ci && npm run desktop:build)
+          (cd film && bun install --frozen-lockfile && QI_STAGE_DIRECTORY="$RUNNER_TEMP/qi-native-stage" bash script/build_and_run.sh --stage-only)
+      - name: Launch both native bundles using disposable workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          ROOT="$(mktemp -d "$RUNNER_TEMP/qi-native-smoke.XXXXXX")"
+          LOG="$ROOT/launch.log"
+          FILM="$RUNNER_TEMP/qi-native-stage/QiMovi.app"
+          WRITER="$(cd writer && node -p "require('./build-desktop/latest.json').app")"
+          for app in "$FILM" "$WRITER"; do
+            codesign --verify --deep --strict "$app"
+            "$app/Contents/Resources/node" --input-type=module -e 'await import(process.argv[1]);' "file://$app/Contents/Resources/runtime/local/server/http.mjs"
+            test -f "$app/Contents/Resources/runtime/local/accounting/resource-journal.mjs"
+          done
+          "$FILM/Contents/Resources/node" "$FILM/Contents/Resources/runtime/local/server/cli.mjs" create-project --data "$ROOT/film" --title 'Synthetic native film'
+          /usr/bin/log stream --level info --style compact --predicate 'subsystem == "com.hampton.qimovieslate.local" OR subsystem == "com.hampton.qicaniscreenwrite.local"' > "$LOG" 2>&1 &
+          LOG_PID=$!
+          cleanup() {
+            kill "$LOG_PID" 2>/dev/null || true
+            if [ -n "${FILM_PID:-}" ]; then kill "$FILM_PID" 2>/dev/null || true; fi
+            if [ -n "${WRITER_PID:-}" ]; then kill "$WRITER_PID" 2>/dev/null || true; fi
+            cat "$LOG"
+          }
+          trap cleanup EXIT
+          sleep 2
+          /usr/bin/open -n -a "$FILM" --args --project "$ROOT/film"
+          /usr/bin/open -n -a "$WRITER" --args --workspace "$ROOT/writer"
+          for attempt in {1..60}; do
+            if grep -F 'QiMovieSlate:' "$LOG" | grep -Fq 'Local owner session opened' &&
+               grep -F 'QiCanIScreenwrite:' "$LOG" | grep -Fq 'Local owner session opened'; then
+              break
+            fi
+            sleep 1
+          done
+          grep -F 'QiMovieSlate:' "$LOG" | grep -F 'Local owner session opened'
+          grep -F 'QiCanIScreenwrite:' "$LOG" | grep -F 'Local owner session opened'
+          FILM_PID="$(pgrep -x QiMovieSlate)"
+          WRITER_PID="$(pgrep -x QiCanIScreenwrite)"
+          test -f "$ROOT/film/config.json"
+          test -f "$ROOT/writer/config.json"
+          cat > "$ROOT/check-windows.swift" <<'SWIFT'
+          import CoreGraphics
+          import Foundation
+
+          let pids = Set(CommandLine.arguments.dropFirst().compactMap(Int.init))
+          let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+          let windowOwners = Set(windows.compactMap { window -> Int? in
+              guard window[kCGWindowLayer as String] as? Int == 0 else { return nil }
+              return window[kCGWindowOwnerPID as String] as? Int
+          })
+          guard pids.count == 2, pids.isSubset(of: windowOwners) else {
+              fputs("Both native windows were not visible to the window server.\n", stderr)
+              exit(1)
+          }
+          print("Both native application windows are visible.")
+          SWIFT
+          swift "$ROOT/check-windows.swift" "$FILM_PID" "$WRITER_PID"
+      - name: Publish the verified main-source bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          WRITER="$(cd writer && node -p "require('./build-desktop/latest.json').app")"
+          ditto -c -k --sequesterRsrc --keepParent "$WRITER" artifacts/QiScreenwrite-macOS-arm64.zip
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/qi-native-stage/QiMovi.app" artifacts/QiMovi-macOS-arm64.zip
+          {
+            git -C writer log -1 --format='QiScreenwrite source: %H%nQiScreenwrite tree: %T'
+            git -C film log -1 --format='QiMovi source: %H%nQiMovi tree: %T'
+            printf '%s\n' 'Development ad-hoc signatures. Native launch, window presence and local owner session checked on the macOS runner.'
+          } > artifacts/BUILD.txt
+          (cd artifacts && shasum -a 256 ./*.zip > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qi-brand-native-main-arm64
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: error

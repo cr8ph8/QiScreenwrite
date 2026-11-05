@@ -1,13 +1,14 @@
 import { need } from './resource-math.mjs';
-// A captured provider attempt supersedes only its exact native attempt's token
-// counters. Imported provider bills and unrelated tasks are never auto-matched.
+// Known meter counters supersede only their exact native attempt's counters.
+// Missing meter counters preserve native receipt evidence independently per field.
+// Imported provider bills and unrelated tasks are never auto-matched.
 export function usageView(native, runs) {
   const rows = new Map(native.map(row => [row.key, row]));
   for (const run of runs) {
     const key = `local:${run.taskId}`, prior = rows.get(key);
     need(!prior || prior.model === run.model && prior.provider.toLowerCase() === run.provider.toLowerCase(), 'RESOURCE_ATTEMPT_MISMATCH', 409);
     rows.set(key, { ...prior, key, taskId: run.taskId, origin: 'DIRECT_LOCAL_METER', provider: run.provider, model: run.model,
-      inputTokens: run.usage.inputTokens, outputTokens: run.usage.outputTokens, status: prior?.status ?? run.status,
+      inputTokens: run.usage.inputTokens ?? prior?.inputTokens ?? null, outputTokens: run.usage.outputTokens ?? prior?.outputTokens ?? null, status: prior?.status ?? run.status,
       elapsedMs: run.usage.elapsedMs, estimate: run.estimate, timestamp: run.startedAt, currency: run.estimate?.currency ?? null,
       // Counts are provider-reported, not token estimates. The price is separate.
       cost: prior?.cost ?? null, costKind: prior?.costKind ?? 'unknown' });

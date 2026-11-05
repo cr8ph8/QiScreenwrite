@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ResourceJournal, openResourceJournal } from '../accounting/resource-journal.mjs';
 import { units, decimal, product, sum, estimate, metrics, ollamaMetrics, entryTotals } from '../accounting/resource-math.mjs';
 import { usageView } from '../accounting/resource-view.mjs';
+import { resourceSnapshot } from '../server/resource-accounting.mjs';
 const now = '2026-11-04T20:00:00.000Z';
 const rate = (extra = {}) => ({ id: 'rate-v1', provider: 'OLLAMA', model: 'qwen:fixture', currency: 'USD', inputPerMillion: '2', outputPerMillion: '10', cachedPerMillion: null,
   watts: '100', electricityPerKwh: '0.2', validFrom: '2026-11-01T00:00:00.000Z', expiresAt: '2026-12-01T00:00:00.000Z', basis: 'Synthetic test assumptions, not vendor prices', ...extra });
@@ -84,6 +85,54 @@ test('failure to persist completion never masks an already completed provider ac
 test('native receipt and direct meter for one exact attempt count only once', () => {
   const view = usageView([{ key: 'local:task-1', taskId: 'task-1', provider: 'OLLAMA', model: 'qwen:fixture', origin: 'LOCAL_MODEL', inputTokens: 20, outputTokens: 10, status: 'FAILED' }], [{ ...meta(), startedAt: now, usage: metrics({ inputTokens: 20, outputTokens: 10 }), estimate: null, status: 'PROVIDER_RETURNED' }]);
   assert.equal(view.totalAttempts, 1); assert.equal(view.groups[0].outputKnown, '10'); assert.equal(view.attempts[0].status, 'FAILED');
+});
+test('token counters independently prefer known meter values and retain native fallbacks', async t => {
+  const cases = [
+    { name: 'missing meter input', native: [20, 10], meter: [null, 3], expected: [20, 3] },
+    { name: 'missing meter output', native: [20, 10], meter: [4, null], expected: [4, 10] },
+    { name: 'absent meter counters', native: [20, 10], meter: [], expected: [20, 10] },
+    { name: 'explicit meter zero', native: [20, 10], meter: [0, 0], expected: [0, 0] },
+    { name: 'explicit native zero', native: [0, 0], meter: [null, null], expected: [0, 0] },
+    { name: 'unknown counters', native: [null, null], meter: [null, null], expected: [null, null] },
+    { name: 'partially known native receipt', native: [20, null], meter: [null, null], expected: [20, null] },
+    { name: 'meter without native receipt', native: null, meter: [4, 3], expected: [4, 3] },
+    { name: 'unknown meter without native receipt', native: null, meter: [], expected: [null, null] },
+  ];
+  for (const value of cases) await t.test(value.name, () => {
+    const native = value.native === null ? [] : [{ key: 'local:task-1', provider: 'OLLAMA', model: 'qwen:fixture', inputTokens: value.native[0], outputTokens: value.native[1] }];
+    const view = usageView(native, [{ ...meta(), startedAt: now, usage: { inputTokens: value.meter[0], outputTokens: value.meter[1] }, estimate: null, status: 'UNCERTAIN' }]);
+    assert.equal(view.totalAttempts, 1);
+    assert.deepEqual([view.attempts[0].inputTokens, view.attempts[0].outputTokens], value.expected);
+    for (const [index, field] of ['input', 'output'].entries()) {
+      assert.equal(view.groups[0][`${field}Known`], String(value.expected[index] ?? 0));
+      assert.equal(view.groups[0][`${field}Unknown`], Number(value.expected[index] === null));
+    }
+  });
+});
+test('Costs retains native token counts when journal completion persistence fails and after reopen', async t => {
+  const { j, directory } = setup(t), append = j.append.bind(j);
+  j.append = (key, type, data) => { if (type === 'run-finish') throw new Error('disk full'); return append(key, type, data); };
+  const result = await j.measure(meta(), async () => ({ prompt_eval_count: 22, eval_count: 0 }));
+  const creativeServices = { list: () => [{ id: 'task-1', model: 'qwen:fixture', status: 'completed', createdAt: now,
+    report: { usage: { inputTokens: result.prompt_eval_count, outputTokens: result.eval_count } } }], issues: [] };
+  const verify = journal => {
+    const snapshot = resourceSnapshot(journal, creativeServices);
+    assert.equal(snapshot.runs[0].status, 'UNCERTAIN');
+    assert.equal(snapshot.runs[0].usage.inputTokens, null);
+    assert.equal(snapshot.runs[0].usage.outputTokens, null);
+    assert.equal(snapshot.usage.totalAttempts, 1);
+    assert.deepEqual([snapshot.usage.attempts[0].inputTokens, snapshot.usage.attempts[0].outputTokens], [22, 0]);
+    assert.equal(snapshot.usage.attempts[0].status, 'completed');
+    assert.equal(snapshot.usage.attempts[0].cost, null);
+    assert.equal(snapshot.usage.attempts[0].estimate, null);
+    assert.equal(snapshot.usage.groups[0].inputKnown, '22');
+    assert.equal(snapshot.usage.groups[0].outputKnown, '0');
+    assert.equal(snapshot.usage.groups[0].inputUnknown, 0);
+    assert.equal(snapshot.usage.groups[0].outputUnknown, 0);
+  };
+  assert.equal(j.snapshot().degraded, true); verify(j); j.close();
+  const reopened = new ResourceJournal(directory, 'qimovi', 'project-1');
+  try { verify(reopened); } finally { reopened.close(); }
 });
 test('unknown tasks do not disappear when known subtotals are displayed', () => {
   const view = usageView([{ key: '1', provider: 'P', model: 'M', origin: 'X', inputTokens: 10, outputTokens: 4 }, { key: '2', provider: 'P', model: 'M', origin: 'X', inputTokens: null, outputTokens: null }], []);

@@ -1,4 +1,6 @@
 import { openResourceJournal } from '../accounting/resource-journal.mjs';
+import { openResearchLoop } from '../research/engine.mjs';
+import { target as researchTarget } from '../research/target.mjs';
 import { resourceSnapshot } from './resource-accounting.mjs';
 import { scanWriterBrands } from './brand-planning.mjs';
 // Loopback HTTP service for the local writer. Binds 127.0.0.1 only. Serves the
@@ -12,7 +14,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { WorkspaceStore, LocalError, check, loadConfig, acquireLock, privateDirectory, sha256, ID } from './storage.mjs';
+import { WorkspaceStore, LocalError, check, loadConfig, acquireLock, privateDirectory, sha256, hashCanonical, ID } from './storage.mjs';
 import { validateRecord } from './contracts.mjs';
 import { QiMoviBridge } from './qimovi.mjs';
 import { QiMoviLibrary } from './qimovi-library.mjs';
@@ -55,7 +57,7 @@ const constantEqual = (left, right) => typeof left === 'string' && typeof right 
 export async function startServer({ directory, port = 0, dist = null, loginNonce = null, sessionLifetimeMs = 12 * 60 * 60 * 1000, bridge, analysisOptions } = {}) {
   directory = privateDirectory(directory);
   const unlock = acquireLock(directory);
-  let store, resourceJournal;
+  let store, resourceJournal, researchLoop;
   try {
     const config = loadConfig(directory);
     store = new WorkspaceStore(directory, validateRecord);
@@ -64,6 +66,15 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
     const developmentRecovery = new DevelopmentRecoveryStore(store);
     const rightsRecovery = new RightsRecoveryStore(store);
     resourceJournal = openResourceJournal(directory, 'qiscreenwrite', store.project().id);
+    researchLoop = openResearchLoop({ directory, app: 'qiscreenwrite', projectId: store.project().id,
+      target: researchTarget, resourceJournal,
+      readSourceHash: () => hashCanonical({ project: store.project(), records: store.list()
+        .map(record => ({ id: record.id, version: record.version, sha256: record.sha256 }))
+        .sort((left, right) => left.id.localeCompare(right.id)) }),
+      // Admission holds the source database lock while the research ledger
+      // performs its own synchronous compare-and-swap transaction.
+      withSourceLock: operation => store.atomic(operation),
+    });
     const creativeServices = new CreativeServices(directory, store, { ...analysisOptions, resourceJournal });
     const qimovi = bridge ?? new QiMoviBridge(directory);
     const qimoviLibrary = new QiMoviLibrary(qimovi, store);
@@ -105,6 +116,24 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
           check(token && (sessions.get(sha256(token)) ?? 0) > Date.now(), 'OWNER_SESSION_REQUIRED', 401);
           if (url.pathname === '/api/session' && req.method === 'DELETE') { sessions.clear(); return json(res, 200, { authenticated: false }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0` }); }
           resourceJournal.observeRequest(req, res, url.pathname);
+          if (url.pathname === '/api/research-loop' || url.pathname.startsWith('/api/research-loop/')) {
+            check([...url.searchParams].length === 0, 'RESEARCH_QUERY_REJECTED', 422);
+            try {
+              if (url.pathname === '/api/research-loop' && req.method === 'GET') return json(res, 200, researchLoop.snapshot());
+              if (url.pathname === '/api/research-loop/export' && req.method === 'GET') return json(res, 200, researchLoop.export(), { 'Content-Disposition': 'attachment; filename="private-research-loop.json"' });
+              if (url.pathname === '/api/research-loop/start' && req.method === 'POST') return json(res, 200, researchLoop.start(await body(req, 4096)));
+              if (url.pathname === '/api/research-loop/cancel' && req.method === 'POST') return json(res, 200, researchLoop.cancel(await body(req, 4096)));
+              if (url.pathname === '/api/research-loop/review' && req.method === 'POST') {
+                const input = await body(req, 4096);
+                check((sessions.get(sha256(token)) ?? 0) > Date.now(), 'OWNER_SESSION_REQUIRED', 401);
+                return json(res, 200, researchLoop.review(input, config.ownerActorId));
+              }
+              throw new LocalError('RESEARCH_ROUTE_NOT_FOUND', 404);
+            } catch (error) {
+              if (error instanceof LocalError) throw error;
+              throw new LocalError(/^RESEARCH_[A-Z_]+$/.test(error.code ?? '') ? error.code : 'RESEARCH_UNAVAILABLE', [404,409,413,422,503].includes(error.status) ? error.status : 503);
+            }
+          }
           if (url.pathname === '/api/resource-accounting' || url.pathname.startsWith('/api/resource-accounting/')) {
             check([...url.searchParams].length === 0, 'RESOURCE_QUERY_REJECTED', 422);
             try {
@@ -255,8 +284,20 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
       origin: expectedOrigin,
       loginUrl: loginNonce ? `${expectedOrigin}/#login=${loginNonce}` : null,
       close() {
-        return closePromise ??= new Promise((resolve, reject) => { server.close(() => { try { resourceJournal.close(); store.close(); resolve(); } catch (error) { reject(error); } finally { unlock(); } }); server.closeIdleConnections(); });
+        return closePromise ??= new Promise((resolve, reject) => {
+          // Cancel immediately: a separate in-flight HTTP request may keep the
+          // server draining long enough for an experiment to reach admission.
+          const researchClosed = researchLoop.close();
+          // Preserve a shutdown error for the callback without leaving an
+          // unhandled rejection while other requests finish draining.
+          researchClosed.catch(() => {});
+          server.close(async () => {
+            try { try { await researchClosed; } finally { try { resourceJournal.close(); } finally { store.close(); } } resolve(); }
+            catch (error) { reject(error); } finally { unlock(); }
+          });
+          server.closeIdleConnections();
+        });
       },
     };
-  } catch (error) { try { resourceJournal?.close(); store?.close(); } finally { unlock(); } throw error; }
+  } catch (error) { try { try { await researchLoop?.close(); } finally { try { resourceJournal?.close(); } finally { store?.close(); } } } finally { unlock(); } throw error; }
 }

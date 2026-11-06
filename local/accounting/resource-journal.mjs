@@ -100,13 +100,20 @@ export class ResourceJournal {
     const counts = new Map(); for (const e of events.filter(e => e.type === 'http-start')) counts.set(e.data.family, (counts.get(e.data.family) ?? 0) + 1);
     const httpStarted = events.filter(e => e.type === 'http-start').length, httpFinished = events.filter(e => e.type === 'http-finish').length;
     const entries = events.filter(e => e.type === 'entry').map(e => e.data);
+    // Research has no provider calls. Keep its measured work separate from
+    // model receipts and HTTP latency; an unfinished run is not free.
+    const researchFinishes = new Map(events.filter(e => e.type === 'research-finish').map(e => [e.data.id, e.data]));
+    const researchOutcomes = new Map(events.filter(e => e.type === 'research-outcome').map(e => [e.data.id, e.data]));
+    const researchRuns = events.filter(e => e.type === 'research-start').map(e => ({ ...e.data,
+      status: 'UNCERTAIN', elapsedMs: null, completedTrials: null, resources: null, ...(researchFinishes.get(e.data.id) ?? {}),
+      ...(researchFinishes.has(e.data.id) ? { status: 'OUTCOME_UNCERTAIN', elapsedMs: null } : {}), ...(researchOutcomes.get(e.data.id) ?? {}) }));
     return { schema: 'qi-resource-accounting/v1', app: this.app, projectId: this.projectId, authority: 'OBSERVATION_ONLY', spendAuthorized: false,
       degraded: this.degraded || events.length >= MAX_EVENTS, eventCount: events.length, eventLimit: MAX_EVENTS, headHash: events.at(-1)?.hash ?? GENESIS,
-      runs, inputTokens: sumCounter('inputTokens'), outputTokens: sumCounter('outputTokens'),
+      runs, researchRuns: researchRuns.slice(-100), inputTokens: sumCounter('inputTokens'), outputTokens: sumCounter('outputTokens'),
       requestActivity: { started: httpStarted, finished: httpFinished, unresolved: httpStarted - httpFinished, byFamily: [...counts].map(([family, count]) => ({ family, count })) },
       entries, entryTotals: entryTotals(entries), rates: events.filter(e => e.type === 'rate').map(e => e.data),
       coverage: { hardwareEnergy: 'UNMETERED', humanTime: 'MANUAL_ONLY', hostedServices: 'EXISTING_RECEIPTS_OR_MANUAL', outsideApplications: 'UNOBSERVED',
-        httpTiming: 'REQUEST_WALL_TIME_NOT_CPU_OR_JOB_TIME', monetaryEstimates: 'OWNER_RATES_NOT_INVOICES', automaticSpendLimits: 'NOT_IMPLEMENTED',
+        httpTiming: 'REQUEST_WALL_TIME_NOT_CPU_OR_JOB_TIME', research: 'SYNTHETIC_LOCAL_WORK; ZERO_PROVIDER_CALLS; ENERGY_UNMETERED; NOT_ADDED_TO_MODEL_USAGE', monetaryEstimates: 'OWNER_RATES_NOT_INVOICES', automaticSpendLimits: 'NOT_IMPLEMENTED',
         backup: 'EXPORT_RESOURCE_JOURNAL_SEPARATELY; STANDARD_CREATIVE_BACKUP_DOES_NOT_INCLUDE_THIS_DATABASE' } };
   }
   export() { const events = this.read(); return { schema: 'qi-resource-journal/v1', app: this.app, projectId: this.projectId, events, exportedAt: this.now(), notice: 'Private accounting metadata; no screenplay text. Not an invoice or financial authorization.' }; }

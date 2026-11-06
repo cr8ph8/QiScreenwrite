@@ -11,7 +11,7 @@ test('CLI initializes and reads a private workspace from a checkout with spaces 
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const checkout = path.join(scratch, 'Writer Studio café');
   const root = fileURLToPath(new URL('../..', import.meta.url));
-  for (const dir of ['local/server', 'local/contracts', 'local/accounting', 'shared/creative-services']) fs.cpSync(path.join(root, dir), path.join(checkout, dir), { recursive: true });
+  for (const dir of ['local/server', 'local/contracts', 'local/accounting', 'local/research', 'shared/creative-services']) fs.cpSync(path.join(root, dir), path.join(checkout, dir), { recursive: true });
   const run = command => JSON.parse(execFileSync(process.execPath, ['local/server/cli.mjs', command, '--data', path.join(scratch, 'Private writing')], { cwd: checkout, encoding: 'utf8' }));
   assert.equal(run('init').initialized, true);
   assert.equal(run('status').drafts, 0);

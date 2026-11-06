@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, feat/local-brand-integration]
   pull_request:
-    branches: [main]
+    branches: [main, codex/preserve-known-token-counts]
 permissions:
   contents: read
 concurrency:
@@ -63,6 +63,8 @@ jobs:
           test -f "$APP/Contents/Resources/runtime/local/server/brand-planning.mjs"
           test -f "$APP/Contents/Resources/runtime/local/contracts/brand-scanner.mjs"
           test -f "$APP/Contents/Resources/runtime/local/accounting/resource-journal.mjs"
+          test -f "$APP/Contents/Resources/runtime/local/research/engine.mjs"
+          test -f "$APP/Contents/Resources/runtime/local/research/trial-worker.mjs"
           "$APP/Contents/Resources/node" --input-type=module -e 'await import(process.argv[1]);' "file://$APP/Contents/Resources/runtime/local/server/http.mjs"
           mkdir -p "$RUNNER_TEMP/writer-package" build-artifacts
           ditto "$APP" "$RUNNER_TEMP/writer-package/QiCanIScreenwrite.app"

@@ -18,7 +18,7 @@ fs.copyFileSync(binary, path.join(contents, 'MacOS/QiCanIScreenwrite'));
 fs.copyFileSync(process.execPath, path.join(resources, 'node'));
 fs.chmodSync(path.join(contents, 'MacOS/QiCanIScreenwrite'), 0o755);
 fs.chmodSync(path.join(resources, 'node'), 0o755);
-for (const name of ['dist-local', 'local/server', 'local/contracts', 'local/accounting', 'local/desktop', 'shared/creative-services']) fs.cpSync(path.join(root, name), path.join(resources, 'runtime', name), { recursive: true });
+for (const name of ['dist-local', 'local/server', 'local/research', 'local/contracts', 'local/accounting', 'local/desktop', 'shared/creative-services']) fs.cpSync(path.join(root, name), path.join(resources, 'runtime', name), { recursive: true });
 fs.copyFileSync(path.join(root, 'local/DESKTOP-GUIDE.md'), path.join(resources, 'Desktop Guide.md'));
 fs.writeFileSync(path.join(resources, 'runtime/package.json'), '{"type":"module","private":true}\n');
 const iconset = path.join(output, 'QiCanIScreenwrite.iconset');

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './resource-cost.css';
+import ResearchLab from '../research/ResearchLab';
 type Total = { currency: string; estimate: string | null; knownActual: string; actual: string | null; committed: string; forecast: string | null; unknownEstimateCount: number; unknownActualCount: number };
 type Group = { provider: string; model: string; origin: string; attempts: number; inputKnown: string; outputKnown: string; inputUnknown: number; outputUnknown: number };
 type Financing = { currency: string; signedCash: string; receivedCash: string; remainingBeforeOtherFunding: string | null };
@@ -7,6 +8,7 @@ type CostContext = { schema: string; scope: string; projectId: string; readOnly:
 type Snapshot = { schema: string; projectId: string; app: string; authority: string; spendAuthorized: boolean; degraded: boolean; issues: string[];
   production: CostContext['production']; financing: CostContext['financing']; usage: { groups: Group[]; attempts: { key: string; provider: string; model: string; status: string; quotedCredits?: string | null; cost?: string | null; costKind?: string; currency?: string | null; estimate?: { modelCost: string | null; electricityCost: string | null; energyKwh: string | null; currency: string | null } | null }[] };
   requestActivity: { started: number; finished: number; unresolved: number; byFamily: { family: string; count: number }[] };
+  researchRuns?: { id: string; targetId: string; status: string; elapsedMs: number | null; completedTrials: number | null; resources: { inputTokens: number; outputTokens: number; providerCostUsd: string; energyKwh: number | null; cpuMicros: number | null; resultBytes: number } | null }[];
   entryTotals: { stage: string; unit: string; provider: string; account: string; amount: string }[]; coverage: Record<string, string> };
 type Rate = { id: string; provider: string; model: string; currency: string; inputPerMillion: string | null; outputPerMillion: string | null; cachedPerMillion: string | null; watts: string | null; electricityPerKwh: string | null; validFrom: string; expiresAt: string; basis: string };
 type Entry = { id: string; stage: string; unit: string; amount: string; provider: string; account: string; taskId: string; evidence: string; recordedAt: string };
@@ -48,7 +50,7 @@ export function ResourceCostDock({ projectId, app, draftId, draftVersion, draftS
   async function work(fn: () => Promise<void>) { if (busy) return; setBusy(true); setError(''); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Request not confirmed.'); } finally { if (alive.current) setBusy(false); } }
   function rateData(): Rate { const n = (v: string) => v.trim() || null; return { ...rates, inputPerMillion: n(rates.inputPerMillion), outputPerMillion: n(rates.outputPerMillion), cachedPerMillion: n(rates.cachedPerMillion), watts: n(rates.watts), electricityPerKwh: n(rates.electricityPerKwh), validFrom: new Date().toISOString(), expiresAt: new Date(`${rates.expiresAt}T23:59:59.999Z`).toISOString() }; }
   return <aside className="qi-cost-dock" aria-label="Resource and cost accounting">
-    <button className="qi-cost-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>Costs · money, tokens & resources</button>
+    <div className="qi-tools-toggles"><ResearchLab projectId={projectId} app={app} onOpen={() => setOpen(false)}/><button className="qi-cost-toggle" onClick={() => setOpen(v => !v)} aria-expanded={open}>Costs · money, tokens & resources</button></div>
     {open && <section className="qi-cost-panel" aria-label="Costs and resources">
       <header><h2>Costs & resources</h2><button onClick={() => setOpen(false)}>Close costs</button></header>
       <p>Saved-workspace observations. Unknown is not free. No payments or production approvals are made here.</p>
@@ -60,6 +62,10 @@ export function ResourceCostDock({ projectId, app, draftId, draftVersion, draftS
         <h3>Model usage · including failed attempts</h3><Usage groups={value.usage.groups}/>
         <p>Charges are not inferred from token counts without an explicit rate. Quotes are not invoices; cached input and reasoning are subsets.</p>
         <details><summary>Recent attempts and estimates</summary>{value.usage.attempts.map(a => <p key={a.key}>{a.provider} / {a.model}: {a.status}. Recorded monetary observation: {unknown(a.cost)} {a.currency} ({a.costKind ?? 'unknown'}). Quoted credits: {unknown(a.quotedCredits)}. Model-price estimate: {unknown(a.estimate?.modelCost)} {a.estimate?.currency}. Electricity estimate: {unknown(a.estimate?.electricityCost)}. Energy estimate: {unknown(a.estimate?.energyKwh)} kWh.</p>)}</details>
+        <h3>Research runs · separate from model usage</h3>
+        {(value.researchRuns ?? []).length === 0 && <p>No research run observations.</p>}
+        {(value.researchRuns ?? []).slice(-10).map(r => <p key={r.id}>{r.targetId}: {r.status}. Trials: {r.completedTrials ?? 'unknown'}; job time: {r.elapsedMs == null ? 'unknown' : `${r.elapsedMs} ms`}.
+          {r.resources ? ` Provider tokens: ${r.resources.inputTokens} in / ${r.resources.outputTokens} out. Provider charge: USD ${r.resources.providerCostUsd}. Worker CPU: ${r.resources.cpuMicros == null ? 'unknown' : `${r.resources.cpuMicros} microseconds`}. Serialized results: ${r.resources.resultBytes} bytes. Electricity and hardware costs remain unmeasured.` : ' Completion measurements are unknown.'}</p>)}
         <h3>Activity coverage</h3><p>{value.requestActivity.started} authenticated operations observed; {value.requestActivity.unresolved} have no completion observation. Request duration is not render time, CPU time or human work.</p>
         <details><summary>Coverage and exclusions</summary>{Object.entries(value.coverage).map(([k, v]) => <p key={k}><strong>{k}</strong>: {v}</p>)}<p>Standard creative backups do not contain this separate accounting journal. Export it separately. Physical electricity is unmetered; per-run wattage estimates must not be added across overlapping work.</p></details>
         <h3>Supplemental resource entries</h3><p>Shown separately, not added to the production budget or usage receipts. Do not record the same expense twice. Paid cash, incurred expenses, credit consumption and allocations are different views.</p>

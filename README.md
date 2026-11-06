@@ -40,6 +40,10 @@ The service listens on `127.0.0.1:4318` and opens a short-lived local login link
 
 For development, keep the local service running and start `npm run dev` in a second terminal. It serves the interface at `http://127.0.0.1:5178` and proxies the local API. Keep the service bound to loopback; it is a personal writing workspace, not a public web server.
 
+## Research lab pilot
+
+Open **Research lab** beside **Costs** to run bounded, offline source-retrieval experiments on public synthetic examples. Hampton admission can update a separate accepted research configuration; the writing editor and creative analysis retain their existing behavior. The lab includes independent scoring, confirmation, cancellation, source-version checks and resource receipts. See [installation and usage](docs/research-loop.md) and the [operating contract](local/research/program.md). This pilot makes no model calls and does not establish unseen-screenplay performance.
+
 ## Start a screenplay
 
 1. Open **My drafts**, create a draft or import Fountain/text/common FDX.

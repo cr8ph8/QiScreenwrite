@@ -123,6 +123,11 @@ export async function startServer({ directory, port = 0, dist = null, loginNonce
               if (url.pathname === '/api/research-loop/export' && req.method === 'GET') return json(res, 200, researchLoop.export(), { 'Content-Disposition': 'attachment; filename="private-research-loop.json"' });
               if (url.pathname === '/api/research-loop/start' && req.method === 'POST') return json(res, 200, researchLoop.start(await body(req, 4096)));
               if (url.pathname === '/api/research-loop/cancel' && req.method === 'POST') return json(res, 200, researchLoop.cancel(await body(req, 4096)));
+              if (url.pathname === '/api/research-loop/review' && req.method === 'POST') {
+                const input = await body(req, 4096);
+                check((sessions.get(sha256(token)) ?? 0) > Date.now(), 'OWNER_SESSION_REQUIRED', 401);
+                return json(res, 200, researchLoop.review(input, config.ownerActorId));
+              }
               throw new LocalError('RESEARCH_ROUTE_NOT_FOUND', 404);
             } catch (error) {
               if (error instanceof LocalError) throw error;

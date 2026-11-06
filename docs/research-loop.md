@@ -29,8 +29,9 @@ The service opens a short-lived local login link for <http://127.0.0.1:4318/>. I
 
 1. Open **Research lab** beside **Costs** in the authenticated app.
 2. Choose the maximum candidate trials, whole-job allowance and evaluation timeout, then select **Start bounded run**.
-3. Inspect the development and confirmation results, admission decision, resource observations and accepted settings version.
-4. Use **Cancel run** to stop active work, or **Export research audit** to retain the complete receipts.
+3. Inspect the development and confirmation scores, resource observations and accepted settings version. A qualifying run appears under **Proposals awaiting owner review**.
+4. Review the configuration change and evidence. Select **Approve research settings** to apply the exact proposal, or **Decline proposal** to reject it. The review and its outcome are recorded in the audit.
+5. Use **Cancel run** to stop active work, or **Export research audit** to retain the complete receipts.
 
 Closing the panel leaves the run active. Stopping the local service cancels active research before its storage closes. Restarting does not resume unfinished work automatically. A lost response can be retried with **Retry same request**, which retains the original request ID.
 
@@ -38,18 +39,20 @@ The policy permits at most **24 candidate trials**, **300 seconds for the whole 
 
 ## What admission means
 
-- Only **COMMIT** changes the lab's accepted research configuration. **DAMP**, **ESCALATE** and **REJECT** preserve it.
+- Only a **COMMIT** from an explicit owner approval changes accepted research settings. **DAMP**, **ESCALATE** and **REJECT** preserve them. A qualifying evaluation records **ESCALATE** while it awaits review.
 - The parent evaluator scores returned source IDs against its labels. Candidate-supplied scores or assertions are not admission evidence.
 - One finalist is selected using development results before confirmation is evaluated. The two splits use different relevant documents, but public labels are reused between runs. A fixture improvement does not establish generalization to unseen screenplays.
 - Source hashes bind each run to the workspace and saved record versions. Final source validation and accepted-state admission run under synchronous SQLite locks; edits during the experiment cause escalation instead of stale acceptance.
 - The parent enforces deadlines and terminates real worker threads. Workers run fixed repository code and receive numeric configuration; this is not a sandbox for arbitrary generated code.
 - Missing or failed required checks cannot authorize acceptance. Dataset, evaluator and policy hashes bind the recorded experiment contract. Local hash chains detect inconsistencies but have no external anchor.
 
+Existing journals from the first packaged pilot keep their accepted settings and audit history. On first open, the new lab records its review policy. Use the new build for subsequent research in that workspace.
+
 ## Costs and backups
 
 Provider input/output tokens and provider charge are known zero because this target makes no provider calls. That does not make computation free: whole-job elapsed time and returned serialized bytes are recorded; worker CPU is recorded when available and otherwise remains unknown. Electricity, hardware cost and unobserved resource use remain unmeasured.
 
-Research receipts live in the separate `research-loop.sqlite` journal. The resource journal records start, measured evaluation consumption, and the final decision separately from HTTP request duration. Decision-inclusive elapsed time excludes the last telemetry write itself; a missing final receipt is marked OUTCOME_UNCERTAIN while known consumption remains available. A missing completion is uncertain, not zero usage. Export the research audit and resource journal separately from creative backups; the research result bytes are not a measurement of total disk consumption.
+Research receipts live in the separate `research-loop.sqlite` journal. The resource journal records the evaluation start, consumption and outcome separately from HTTP request duration. The owner review is a separate event in the research audit. Approval requires the completed evaluation receipt. Decision-inclusive elapsed time excludes the last telemetry write itself; a missing final receipt is marked OUTCOME_UNCERTAIN while known consumption remains available. A missing completion is uncertain, not zero usage. Export the research audit and resource journal separately from creative backups; the research result bytes are not a measurement of total disk consumption.
 
 ## Stage a macOS development candidate
 

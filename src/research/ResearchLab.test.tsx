@@ -6,7 +6,7 @@ import ResearchLab from './ResearchLab';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const snapshot = (extra = {}) => ({ schema: 'qi-research-loop/v1', app: 'qiscreenwrite', projectId: 'fixture', degraded: false,
   target: { id: 'synthetic', title: 'Sample source retrieval', description: 'Public synthetic examples.' }, contract: {},
-  accepted: { version: 0, hash: '0'.repeat(64), config: { titleWeight: 1, textWeight: 0, tagWeight: 0 } }, active: null, runs: [], events: [], ...extra });
+  accepted: { version: 0, hash: '0'.repeat(64), config: { titleWeight: 1, textWeight: 0, tagWeight: 0 } }, active: null, pendingReviews: [], runs: [], events: [], ...extra });
 const reply = (value: unknown) => Promise.resolve({ ok: true, json: async () => value });
 
 it('opening and closing research does not submit work or lose unsaved writing', async () => {
@@ -54,4 +54,26 @@ it('degraded journal state disables execution and reports unknown accepted state
   fireEvent.click(screen.getByRole('button', { name: 'Research lab' }));
   expect((await screen.findByRole('alert')).textContent).toContain('RESEARCH_LEDGER_CORRUPT');
   expect((screen.getByRole('button', { name: 'Start bounded run' }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('shows the exact proposed changes before approval and submits only their review binding', async () => {
+  const proposalHash = 'b'.repeat(64);
+  const proposal = { id: 'proposed-run', proposalHash, acceptedVersion: 0, sourceHash: 'a'.repeat(64),
+    config: { titleWeight: 0, textWeight: 1, tagWeight: 0 }, checks: { verification: 'PASS', budget: 'PASS' },
+    development: { baseline: { correct: 1, total: 6 }, candidate: { correct: 6, total: 6 } },
+    confirmation: { baseline: { correct: 1, total: 6 }, candidate: { correct: 5, total: 6 } } };
+  const fetcher = vi.fn((route: string, _options?: RequestInit) => route.endsWith('/review')
+    ? reply(snapshot({ accepted: { version: 1, hash: 'c'.repeat(64), config: proposal.config } }))
+    : reply(snapshot({ pendingReviews: [proposal] })));
+  vi.stubGlobal('fetch', fetcher);
+  render(<ResearchLab projectId="fixture" app="qiscreenwrite"/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Research lab' }));
+  const approve = await screen.findByRole('button', { name: 'Approve research settings' });
+  expect(screen.getByText(/Title weight 1 → 0/)).toBeTruthy();
+  expect(screen.getByText(/Confirmation 1 \/ 6 → 5 \/ 6/)).toBeTruthy();
+  expect(fetcher.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  fireEvent.click(approve);
+  await screen.findByText('Accepted research settings · version 1');
+  const review = fetcher.mock.calls.find(([route]) => route.endsWith('/review'))!;
+  expect(JSON.parse(String(review[1]?.body))).toEqual({ projectId: 'fixture', runId: 'proposed-run', proposalHash, action: 'APPROVE' });
 });

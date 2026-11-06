@@ -64,6 +64,7 @@ test('research HTTP requires owner session, exact origin, bounded fields, and th
   assert.equal((await f.call('/api/research-loop')).status, 401);
   assert.equal((await f.call('/api/research-loop/export')).status, 401);
   assert.equal((await f.call('/api/research-loop/start', { method: 'POST', value: f.request() })).status, 401);
+  assert.equal((await f.call('/api/research-loop/review', { method: 'POST', value: {} })).status, 401);
   await f.login();
   for (const origin of [null, 'https://untrusted.example']) {
     assert.equal((await f.call('/api/research-loop/start', { method: 'POST', value: f.request(), origin })).status, 403);
@@ -90,15 +91,22 @@ test('research HTTP requires owner session, exact origin, bounded fields, and th
   assert.equal(f.providerCalls, 0);
 });
 
-test('synthetic research admits only a separate configuration and accounts without editing or exposing writing', async t => {
+test('explicit research approval updates only lab settings without editing or exposing writing', async t => {
   const f = await fixture(t); await f.login();
   const before = (await f.call('/api/records')).data;
   const started = await f.call('/api/research-loop/start', { method: 'POST', value: f.request() });
   assert.equal(started.status, 200); assert.ok(started.data.active);
   const completed = await f.finished(), run = completed.runs[0];
-  assert.equal(run.status, 'COMPLETED'); assert.equal(run.decision, 'COMMIT');
-  assert.equal(completed.accepted.version, 1);
-  assert.deepEqual(completed.accepted.config, { titleWeight: 0, textWeight: 1, tagWeight: 0 });
+  assert.equal(run.status, 'COMPLETED'); assert.equal(run.reason, 'OWNER_REVIEW_REQUIRED');
+  assert.equal(completed.accepted.version, 0);
+  const approval = { projectId: f.projectId, runId: run.id, proposalHash: completed.pendingReviews[0].proposalHash, action: 'APPROVE' };
+  assert.equal((await f.call('/api/research-loop/review', { method: 'POST', value: approval, origin: 'https://untrusted.example' })).status, 403);
+  assert.equal((await f.call('/api/research-loop/review', { method: 'POST', value: { ...approval, applyToDraft: true } })).status, 422);
+  const approved = await f.call('/api/research-loop/review', { method: 'POST', value: approval });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.runs[0].review.decision, 'COMMIT');
+  assert.equal(approved.data.accepted.version, 1);
+  assert.deepEqual(approved.data.accepted.config, { titleWeight: 0, textWeight: 1, tagWeight: 0 });
   assert.equal(run.confirmation.candidate.correct, 6);
   assert.ok(run.confirmation.candidate.correct > run.confirmation.baseline.correct);
   assert.deepEqual((await f.call('/api/records')).data, before);
@@ -115,15 +123,35 @@ test('synthetic research admits only a separate configuration and accounts witho
   const exported = await f.call('/api/research-loop/export');
   assert.equal(exported.status, 200);
   assert.match(exported.disposition, /private-research-loop\.json/);
-  assert.equal(exported.data.events.at(-1).type, 'run-finish');
+  assert.equal(exported.data.events.at(-1).type, 'run-review');
+  assert.equal(exported.data.events.at(-1).data.actor, 'local-owner');
   assert.equal(JSON.stringify(exported.data).includes(PRIVATE_BODY), false);
   assert.equal(JSON.stringify(exported.data).includes(f.draft.data.title), false);
   const developmentIds = new Set(target.development.flatMap(query => query.relevantIds));
   assert.ok(target.confirmation.every(query => query.relevantIds.every(id => !developmentIds.has(id))));
   await f.reopen();
   const restored = (await f.call('/api/research-loop')).data;
-  assert.deepEqual(restored.accepted, completed.accepted);
+  assert.deepEqual(restored.accepted, approved.data.accepted);
   assert.equal(restored.active, null); assert.equal(restored.runs.length, 1);
+});
+
+test('a screenplay revision after evaluation invalidates the approval', async t => {
+  const f = await fixture(t); await f.login();
+  assert.equal((await f.call('/api/research-loop/start', { method: 'POST', value: f.request() })).status, 200);
+  const proposal = (await f.finished()).pendingReviews[0];
+  const save = await f.call(`/api/records/${f.draft.id}`, { method: 'PUT', value: {
+    kind: f.draft.kind, expectedVersion: f.draft.version, requestId: crypto.randomUUID(),
+    data: { ...f.draft.data, body: PRIVATE_BODY + '\nAn owner revision after evaluation.\n' },
+  } });
+  assert.equal(save.status, 200);
+  const result = await f.call('/api/research-loop/review', { method: 'POST', value: {
+    projectId: f.projectId, runId: proposal.id, proposalHash: proposal.proposalHash, action: 'APPROVE',
+  } });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.runs[0].review.decision, 'ESCALATE');
+  assert.equal(result.data.runs[0].review.reason, 'SOURCE_OR_ACCEPTED_STATE_CHANGED');
+  assert.equal(result.data.accepted.version, 0);
+  assert.deepEqual(result.data.pendingReviews, []);
 });
 
 test('HTTP request replay cannot launch a second experiment or change its budget', async t => {

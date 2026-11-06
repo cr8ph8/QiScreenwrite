@@ -7,10 +7,23 @@ import { canonical, digest, exact, need, validateConfig, scorePredictions, bette
 
 const GENESIS = '0'.repeat(64), MAX_EVENTS = 10000, MAX_RUNS = 200;
 const SHA = /^[a-f0-9]{64}$/;
-export const POLICY = Object.freeze({ schema: 'qi-research-policy/v1', scope: 'RESEARCH_CONFIGURATION_ONLY',
+const OWNER = 'local-owner';
+// Only the shipped automatic-admission pilot ledgers have an upgrade path.
+const LEGACY_EVALUATOR = '6db516c0db87581a0a075f981abd0014c0b17ba4f4d705f3dc6148adf0e6a22c';
+const LEGACY_CONTRACTS = {
+  qimovi: { targetId: 'qimovi-synthetic-filmmaking-retrieval-v1',
+    datasetHash: '04609e4347739a54aa5efdd907dfcf8caa6de306109f69048596901c6e332b04',
+    configurationHash: '3770c06925f919d1751f230f906371b737f811ef0da1b0602a3a2d6286d10d58',
+    policyHash: '8082c29bf3a398ebf81c5db020ca873c8375e1dfeac2ecff99425ff3ef5b26bf' },
+  qiscreenwrite: { targetId: 'qiscreenwrite.synthetic-source-retrieval.v1',
+    datasetHash: '3644a744965afc43198715c7a2ee6f4ab9a3d797d873de9b1ca6d4c6e162f4af',
+    configurationHash: '2494b158f60f5d8576dcf06746e7bbd31acf2d1a1b134acd674e5650e0e047c4',
+    policyHash: '3909e5198023fe682fb0d91d2df52b6bab71f067e6cfc03ec8d86eb7bd2ca512' },
+};
+export const POLICY = Object.freeze({ schema: 'qi-research-policy/v2', scope: 'RESEARCH_CONFIGURATION_ONLY',
   maxTrials: 24, maxWallMs: 300000, trialTimeoutMs: 10000,
   requiredChecks: REQUIRED_CHECKS, selection: 'MORE_CORRECT_OR_EQUAL_WITH_FEWER_ACTIVE_WEIGHTS',
-  confirmation: 'ONE_FINALIST_PER_RUN', provider: 'NONE', autoResume: false });
+  confirmation: 'ONE_FINALIST_PER_RUN', review: 'EXPLICIT_LOCAL_OWNER', provider: 'NONE', autoResume: false });
 const fault = (code, status = 409) => Object.assign(new Error(code), { code, status });
 const clone = value => JSON.parse(canonical(value));
 function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
@@ -92,11 +105,40 @@ export class ResearchLoop {
         CREATE TABLE IF NOT EXISTS research_events(sequence INTEGER PRIMARY KEY, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL, payload TEXT NOT NULL);
         CREATE TRIGGER IF NOT EXISTS research_no_update BEFORE UPDATE ON research_events BEGIN SELECT RAISE(ABORT,'RESEARCH_APPEND_ONLY'); END;
         CREATE TRIGGER IF NOT EXISTS research_no_delete BEFORE DELETE ON research_events BEGIN SELECT RAISE(ABORT,'RESEARCH_APPEND_ONLY'); END;`);
-      const events = this.read();
-      if (!events.length) this.append('initialize', { targetId: target.id, datasetHash: this.datasetHash, evaluatorHash: this.evaluatorHash, policyHash: this.policyHash });
-      else need(events[0].type === 'initialize' && canonical(events[0].data) === canonical({ targetId: target.id, datasetHash: this.datasetHash, evaluatorHash: this.evaluatorHash, policyHash: this.policyHash }), 'RESEARCH_POLICY_CHANGED', 409);
-      this.accepted();
+      this.activatePolicy();
     } catch (error) { this.db.close(); throw error; }
+  }
+  activatePolicy() {
+    const contract = { targetId: this.target.id, datasetHash: this.datasetHash, evaluatorHash: this.evaluatorHash, policyHash: this.policyHash };
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const events = this.read();
+      const upgrades = events.filter(event => event.type === 'policy-activate');
+      if (!events.length) this.append('initialize', contract, true);
+      else {
+        const first = events[0];
+        need(first.type === 'initialize', 'RESEARCH_POLICY_CHANGED', 409);
+        if (canonical(first.data) === canonical(contract)) need(!upgrades.length, 'RESEARCH_POLICY_CHANGED', 409);
+        else {
+          const { configurationHash, ...legacyContract } = LEGACY_CONTRACTS[this.app];
+          const legacy = { ...legacyContract, evaluatorHash: LEGACY_EVALUATOR };
+          const upgrade = { fromPolicyHash: legacy.policyHash, policyHash: this.policyHash };
+          need(legacy.targetId === contract.targetId && legacy.datasetHash === contract.datasetHash
+            && configurationHash === digest({ baseline: this.target.baseline, candidates: this.target.candidates })
+            && legacy.evaluatorHash === contract.evaluatorHash && canonical(first.data) === canonical(legacy)
+            && upgrades.length <= 1 && (!upgrades.length || canonical(upgrades[0].data) === canonical(upgrade)), 'RESEARCH_POLICY_CHANGED', 409);
+          if (!upgrades.length) this.append('policy-activate', upgrade, true);
+        }
+      }
+      // An older app can read its history but cannot start or auto-commit in an upgraded journal.
+      this.db.exec(`CREATE TRIGGER IF NOT EXISTS research_owner_review BEFORE INSERT ON research_events
+        WHEN (json_extract(NEW.payload,'$.type') = 'run-start'
+              AND coalesce(json_extract(NEW.payload,'$.data.policyHash'),'') <> '${this.policyHash}')
+          OR (json_extract(NEW.payload,'$.type') = 'run-finish' AND json_extract(NEW.payload,'$.data.decision') = 'COMMIT')
+        BEGIN SELECT RAISE(ABORT,'RESEARCH_OWNER_REVIEW_REQUIRED'); END;`);
+      this.accepted();
+      this.db.exec('COMMIT');
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   read() {
     const rows = this.db.prepare('SELECT * FROM research_events ORDER BY sequence LIMIT ?').all(MAX_EVENTS + 1);
@@ -122,25 +164,69 @@ export class ResearchLoop {
       if (!inside) this.db.exec('COMMIT');
     } catch (error) { if (!inside) this.db.exec('ROLLBACK'); throw error; }
   }
-  stateHash(config, version) { return digest({ config, version, targetId: this.target.id, datasetHash: this.datasetHash, policyHash: this.policyHash }); }
+  stateHash(config, version, policyHash = this.policyHash) {
+    return digest({ config, version, targetId: this.target.id, datasetHash: this.datasetHash, policyHash });
+  }
+  proposalHash(run, result) {
+    return digest({ app: this.app, projectId: this.projectId, runId: run.id, requestHash: run.requestHash,
+      sourceHash: run.sourceHash, preStateHash: run.preStateHash, acceptedVersion: result.acceptedVersion,
+      datasetHash: run.datasetHash, evaluatorHash: run.evaluatorHash, policyHash: run.policyHash,
+      config: result.config, development: result.development, confirmation: result.confirmation, checks: result.checks });
+  }
+  verifyProposal(run, result, accepted) {
+    need(run?.policyHash === this.policyHash && run.datasetHash === this.datasetHash && run.evaluatorHash === this.evaluatorHash
+      && run.preStateHash === accepted.hash && result.preStateHash === accepted.hash && result.postStateHash === accepted.hash
+      && result.acceptedVersion === accepted.version && result.reason === 'OWNER_REVIEW_REQUIRED' && result.status === 'COMPLETED'
+      && result.decision === 'ESCALATE' && result.proposalHash === this.proposalHash(run, result)
+      && decide({ checks: result.checks, improved: result.confirmedImprovement, omega: result.omega }) === 'COMMIT', 'RESEARCH_STATE_CORRUPT', 409);
+    validateConfig(result.config);
+  }
   accepted(events = this.read()) {
-    let state = { config: clone(this.target.baseline), version: 0, hash: this.stateHash(this.target.baseline, 0) };
-    for (const event of events) if (event.type === 'run-finish' && event.data.decision === 'COMMIT') {
-      const data = event.data; validateConfig(data.config);
-      need(data.preStateHash === state.hash && data.postStateHash === this.stateHash(data.config, state.version + 1)
-        && decide({ checks: data.checks, improved: data.confirmedImprovement, omega: data.omega }) === 'COMMIT', 'RESEARCH_STATE_CORRUPT', 409);
-      state = { config: clone(data.config), version: state.version + 1, hash: data.postStateHash };
+    let policyHash = events[0].data.policyHash;
+    let state = { config: clone(this.target.baseline), version: 0, hash: this.stateHash(this.target.baseline, 0, policyHash) };
+    const starts = new Map(), proposals = new Map();
+    for (const { type, data } of events) {
+      if (type === 'policy-activate') { policyHash = data.policyHash; continue; }
+      if (type === 'run-start') { starts.set(data.id, data); continue; }
+      let config;
+      if (type === 'run-finish') {
+        if (data.proposalHash) {
+          this.verifyProposal(starts.get(data.id), data, state);
+          proposals.set(data.id, data);
+        }
+        if (data.decision !== 'COMMIT') continue;
+        need(policyHash !== this.policyHash && starts.get(data.id)?.policyHash === policyHash
+          && decide({ checks: data.checks, improved: data.confirmedImprovement, omega: data.omega }) === 'COMMIT', 'RESEARCH_STATE_CORRUPT', 409);
+        config = validateConfig(data.config);
+      } else if (type === 'run-review') {
+        const proposal = proposals.get(data.id);
+        need(policyHash === this.policyHash && proposal && proposal.proposalHash === data.proposalHash && data.actor === OWNER
+          && (data.action === 'APPROVE' ? ['COMMIT', 'ESCALATE'].includes(data.decision) : data.action === 'DECLINE' && data.decision === 'REJECT')
+          && data.preStateHash === state.hash, 'RESEARCH_STATE_CORRUPT', 409);
+        proposals.delete(data.id);
+        if (data.decision !== 'COMMIT') {
+          need(data.postStateHash === state.hash, 'RESEARCH_STATE_CORRUPT', 409);
+          continue;
+        }
+        this.verifyProposal(starts.get(data.id), proposal, state);
+        config = proposal.config;
+      } else continue;
+      const version = state.version + 1;
+      need(data.preStateHash === state.hash && data.postStateHash === this.stateHash(config, version, policyHash), 'RESEARCH_STATE_CORRUPT', 409);
+      state = { config: clone(config), version, hash: data.postStateHash };
     }
     return state;
   }
   snapshot() {
     const events = this.read(), finishes = new Map(events.filter(e => e.type === 'run-finish').map(e => [e.data.id, e.data]));
+    const accepted = this.accepted(events);
+    const reviews = new Map(events.filter(e => e.type === 'run-review').map(e => [e.data.id, { ...e.data, at: e.at }]));
     const runs = events.filter(e => e.type === 'run-start').map(e => {
       const finished = finishes.get(e.data.id), active = this.active?.id === e.data.id ? this.active : null;
       return { ...e.data, status: active ? 'RUNNING' : 'INTERRUPTED', reason: active ? null : 'PROCESS_STOPPED_WITHOUT_FINAL_RECORD',
         completedTrials: active?.completedTrials ?? events.filter(t => t.type === 'trial' && t.data.id === e.data.id).length,
         decision: null, finishedAt: null, elapsedMs: active ? Math.ceil(performance.now() - active.start) : null,
-        development: null, confirmation: null, resources: null, ...finished };
+        development: null, confirmation: null, resources: null, ...finished, review: reviews.get(e.data.id) ?? null };
     }).reverse();
     return { schema: 'qi-research-loop/v1', app: this.app, projectId: this.projectId,
       target: { id: this.target.id, title: this.target.title, description: this.target.description },
@@ -148,7 +234,8 @@ export class ResearchLoop {
         candidateCount: this.target.candidates.length, dataBasis: 'PUBLIC_SYNTHETIC_FIXTURE',
         independence: 'SPLIT_WITHIN_ONE_RUN; REPEATED_RUNS_REUSE_PUBLIC_LABELS',
         isolation: 'FIXED_WORKER_NOT_ARBITRARY_CODE_SANDBOX' },
-      accepted: this.accepted(events), active: this.active ? { id: this.active.id, status: 'RUNNING', completedTrials: this.active.completedTrials, maxTrials: this.active.maxTrials } : null,
+      accepted, active: this.active ? { id: this.active.id, status: 'RUNNING', completedTrials: this.active.completedTrials, maxTrials: this.active.maxTrials } : null,
+      pendingReviews: runs.filter(run => run.proposalHash && !run.review && run.preStateHash === accepted.hash),
       runs: runs.slice(0, 20), events: events.slice(-100), degraded: this.degraded };
   }
   start(input) {
@@ -183,6 +270,47 @@ export class ResearchLoop {
     need(input.projectId === this.projectId, 'RESEARCH_PROJECT_MISMATCH', 409);
     need(typeof input.runId === 'string' && this.read().some(e => e.type === 'run-start' && e.data.id === input.runId), 'RESEARCH_RUN_NOT_FOUND', 404);
     if (this.active?.id === input.runId) this.active.controller.abort();
+    return this.snapshot();
+  }
+  withAdmissionLock(operation) {
+    return this.withSourceLock(() => {
+      this.db.exec('BEGIN IMMEDIATE');
+      try { const result = operation(); this.db.exec('COMMIT'); return result; }
+      catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    });
+  }
+  review(input, actor) {
+    exact(input, ['projectId', 'runId', 'proposalHash', 'action']);
+    need(actor === OWNER, 'RESEARCH_REVIEW_AUTHORITY_REQUIRED', 409);
+    need(input.projectId === this.projectId, 'RESEARCH_PROJECT_MISMATCH', 409);
+    need(typeof input.runId === 'string' && typeof input.proposalHash === 'string' && SHA.test(input.proposalHash)
+      && ['APPROVE', 'DECLINE'].includes(input.action), 'RESEARCH_REVIEW_INVALID', 422);
+    need(!this.closed && !this.degraded, 'RESEARCH_UNAVAILABLE', 503);
+    this.withAdmissionLock(() => {
+      const events = this.read();
+      const proposal = events.find(e => e.type === 'run-finish' && e.data.id === input.runId)?.data;
+      need(proposal?.proposalHash === input.proposalHash, 'RESEARCH_PROPOSAL_MISMATCH', 409);
+      const prior = events.find(e => e.type === 'run-review' && e.data.id === input.runId)?.data;
+      if (prior) {
+        need(prior.action === input.action && prior.proposalHash === input.proposalHash, 'RESEARCH_REVIEW_CONFLICT', 409);
+        return;
+      }
+      const run = events.find(e => e.type === 'run-start' && e.data.id === input.runId).data;
+      const accepted = this.accepted(events);
+      let decision = 'REJECT', reason = 'OWNER_DECLINED';
+      if (input.action === 'APPROVE') {
+        if (run.sourceHash !== this.readSourceHash() || run.preStateHash !== accepted.hash) {
+          decision = 'ESCALATE'; reason = 'SOURCE_OR_ACCEPTED_STATE_CHANGED';
+        } else {
+          this.verifyProposal(run, proposal, accepted);
+          need(!this.resourceJournal.degraded && this.resourceJournal.read().some(event => event.type === 'research-outcome'
+            && event.data.id === run.id && event.data.status === 'COMPLETED' && event.data.decision === 'ESCALATE'), 'RESEARCH_ACCOUNTING_UNAVAILABLE', 503);
+          decision = 'COMMIT'; reason = 'OWNER_APPROVED';
+        }
+      }
+      this.append('run-review', { id: run.id, proposalHash: input.proposalHash, action: input.action, actor, decision, reason,
+        preStateHash: accepted.hash, postStateHash: decision === 'COMMIT' ? this.stateHash(proposal.config, accepted.version + 1) : accepted.hash }, true);
+    });
     return this.snapshot();
   }
   remaining(active) { return active.maxWallMs - (performance.now() - active.start); }
@@ -240,7 +368,6 @@ export class ResearchLoop {
         confirmation = { baseline: incumbent.score, candidate: candidate.score };
         this.append('confirmation', { id: active.id, incumbent, candidate });
         confirmedImprovement = better(candidate.score, selected, incumbent.score, active.accepted.config);
-        if (confirmedImprovement) reason = 'CONFIRMED_FIXTURE_IMPROVEMENT';
       } else if (sawReplay) reason = 'REPLAY_PAIR';
     } catch (error) {
       status = active.controller.signal.aborted ? 'CANCELLED' : this.remaining(active) <= 0 ? 'TIMED_OUT' : 'FAILED';
@@ -252,32 +379,32 @@ export class ResearchLoop {
     try { this.resourceJournal.append(`research:${active.id}:finish`, 'research-finish', { id: active.id, status: 'EVALUATION_FINISHED',
       evaluationElapsedMs: active.resources.elapsedMs, completedTrials: active.completedTrials, resources: active.resources }); }
     catch { accounting = 'ERROR'; reason = 'RESEARCH_ACCOUNTING_UNAVAILABLE'; this.degraded = true; }
-    // Both locks are synchronous. No owner save can interleave source validation
-    // with COMMIT, and a second process respecting SQLite locks cannot race it.
-    let outcome;
-    this.withSourceLock(() => {
-      this.db.exec('BEGIN IMMEDIATE');
-      try {
-        const accepted = this.accepted(), stale = this.readSourceHash() !== active.sourceHash || accepted.hash !== active.preStateHash;
-        const withinBudget = !active.controller.signal.aborted && this.remaining(active) > 0;
-        const checks = { shape: 'PASS', scope: 'PASS', verification, authority: 'PASS', source: stale ? 'FAIL' : 'PASS', budget: withinBudget ? 'PASS' : 'FAIL', accounting };
-        const decision = decide({ checks, stale, replay: !selected && sawReplay, improved: confirmedImprovement, omega: null });
-        if (stale) reason = 'SOURCE_OR_ACCEPTED_STATE_CHANGED';
-        else if (!withinBudget) { reason = active.controller.signal.aborted ? 'RESEARCH_CANCELLED' : 'RESEARCH_DEADLINE'; status = active.controller.signal.aborted ? 'CANCELLED' : 'TIMED_OUT'; }
-        active.resources.elapsedMs = Math.ceil(performance.now() - active.start);
-        this.append('run-finish', { id: active.id, status, reason, decision, completedTrials: active.completedTrials,
-          startedAt: active.startedAt, finishedAt: new Date().toISOString(), elapsedMs: Math.ceil(performance.now() - active.start),
-          development, confirmation, resources: active.resources, config: selected, checks, confirmedImprovement, omega: null,
-          preStateHash: accepted.hash, postStateHash: decision === 'COMMIT' ? this.stateHash(selected, accepted.version + 1) : accepted.hash }, true);
-        this.db.exec('COMMIT');
-        outcome = { id: active.id, status, decision, elapsedMs: Math.ceil(performance.now() - active.start), completedTrials: active.completedTrials,
-          resources: { ...active.resources, elapsedMs: Math.ceil(performance.now() - active.start) }, elapsedBasis: 'THROUGH_RESEARCH_DECISION_EXCLUDES_FINAL_RECEIPT_WRITE' };
-      } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    // Evidence can nominate a finalist. A later owner review makes the state transition.
+    const result = this.withAdmissionLock(() => {
+      const accepted = this.accepted(), stale = this.readSourceHash() !== active.sourceHash || accepted.hash !== active.preStateHash;
+      const withinBudget = !active.controller.signal.aborted && this.remaining(active) > 0;
+      const checks = { shape: 'PASS', scope: 'PASS', verification, authority: 'PASS', source: stale ? 'FAIL' : 'PASS', budget: withinBudget ? 'PASS' : 'FAIL', accounting };
+      const eligibility = decide({ checks, stale, replay: !selected && sawReplay, improved: confirmedImprovement, omega: null });
+      if (stale) reason = 'SOURCE_OR_ACCEPTED_STATE_CHANGED';
+      else if (!withinBudget) { reason = active.controller.signal.aborted ? 'RESEARCH_CANCELLED' : 'RESEARCH_DEADLINE'; status = active.controller.signal.aborted ? 'CANCELLED' : 'TIMED_OUT'; }
+      else if (eligibility === 'COMMIT') reason = 'OWNER_REVIEW_REQUIRED';
+      active.resources.elapsedMs = Math.ceil(performance.now() - active.start);
+      const result = { id: active.id, status, reason, decision: eligibility === 'COMMIT' ? 'ESCALATE' : eligibility, completedTrials: active.completedTrials,
+        startedAt: active.startedAt, finishedAt: new Date().toISOString(), elapsedMs: Math.ceil(performance.now() - active.start),
+        development, confirmation, resources: active.resources, config: selected, checks, confirmedImprovement, omega: null,
+        preStateHash: accepted.hash, postStateHash: accepted.hash };
+      if (eligibility === 'COMMIT') {
+        result.acceptedVersion = accepted.version;
+        result.proposalHash = this.proposalHash(active, result);
+      }
+      this.append('run-finish', result, true);
+      return result;
     });
-    // The preceding receipt proves consumption before admission. Only this
-    // later receipt reports the terminal outcome; losing it leaves the outcome
-    // uncertain in Costs, while the research ledger retains its own decision.
+    // Costs measures the evaluation. A later owner review is recorded in the research ledger.
     if (accounting === 'PASS') {
+      const outcome = { id: result.id, status: result.status, decision: result.decision, completedTrials: result.completedTrials,
+        elapsedMs: Math.ceil(performance.now() - active.start), resources: { ...active.resources, elapsedMs: Math.ceil(performance.now() - active.start) },
+        elapsedBasis: 'THROUGH_RESEARCH_DECISION_EXCLUDES_FINAL_RECEIPT_WRITE' };
       try { this.resourceJournal.append(`research:${active.id}:outcome`, 'research-outcome', outcome); }
       catch { this.degraded = true; this.resourceJournal.degraded = true; }
     }
@@ -299,7 +426,7 @@ export function openResearchLoop(options) {
     const unavailable = () => { throw fault(code, 503); };
     return { snapshot: () => ({ schema: 'qi-research-loop/v1', app: options.app, projectId: options.projectId,
       target: { id: options.target.id, title: options.target.title, description: options.target.description },
-      contract: POLICY, accepted: null, active: null, runs: [], events: [], degraded: true, error: code }),
-      start: unavailable, cancel: unavailable, export: unavailable, close: async () => {} };
+      contract: POLICY, accepted: null, active: null, pendingReviews: [], runs: [], events: [], degraded: true, error: code }),
+      start: unavailable, cancel: unavailable, review: unavailable, export: unavailable, close: async () => {} };
   }
 }

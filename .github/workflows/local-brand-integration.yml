@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: cr8ph8/QiMovi
-          ref: 1c648524e6897e1b5d902cc25e213a146f5fc381
+          ref: 9d0d2e233017cc9b1248b6a80bc110b0fb34210c
           path: .paired-qimovi
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2

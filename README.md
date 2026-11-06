@@ -42,7 +42,7 @@ For development, keep the local service running and start `npm run dev` in a sec
 
 ## Research lab pilot
 
-Open **Research lab** beside **Costs** to run bounded, offline source-retrieval experiments on public synthetic examples. Hampton admission can update a separate accepted research configuration; the writing editor and creative analysis retain their existing behavior. The lab includes independent scoring, confirmation, cancellation, source-version checks and resource receipts. See [installation and usage](docs/research-loop.md) and the [operating contract](local/research/program.md). This pilot makes no model calls and does not establish unseen-screenplay performance.
+Open **Research lab** beside **Costs** to run bounded, offline source-retrieval experiments on public synthetic examples. Explicit owner approval can update a separate accepted research configuration. The writing editor and creative analysis retain their existing behavior. The lab includes independent scoring, confirmation, cancellation, source-version checks and resource receipts. See [installation and usage](docs/research-loop.md) and the [operating contract](local/research/program.md). This pilot makes no model calls and does not establish unseen-screenplay performance.
 
 ## Start a screenplay
 

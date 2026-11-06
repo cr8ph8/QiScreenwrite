@@ -32,11 +32,13 @@ security sandbox.
    remaining candidates while the budget remains.
 5. Freeze one finalist. Evaluate that finalist and the incumbent on the
    confirmation split once. No further proposal in this run may use that result.
-6. Require all admission checks to return PASS. ERROR and SKIPPED cannot stand
-   in for evidence. Recheck the source version under the workspace database lock
-   and append the decision atomically with the accepted-state transition.
-7. Only COMMIT changes accepted research settings. DAMP, ESCALATE and REJECT
-   leave them unchanged. Omega has no authority to admit a proposal.
+6. Require all admission checks to return PASS. Stage a qualifying finalist for
+   owner review. Bind its configuration, evidence, policy, saved source and
+   accepted version to its proposal hash.
+7. Require explicit approval of that proposal by the local owner. Recheck its
+   source, accepted version and evaluation receipt under the workspace lock.
+   Record the review and any COMMIT atomically in the lab ledger. A decline
+   records REJECT, and a stale approval records ESCALATE. Omega can only demote.
 8. Stop at cancellation, deadline, exhaustion, or a storage/accounting fault.
    Report what happened and what remains unknown.
 

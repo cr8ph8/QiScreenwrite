@@ -8,7 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { ResourceJournal } from '../accounting/resource-journal.mjs';
 import { ResearchLoop, openResearchLoop, runTrial } from './engine.mjs';
-import { decide, REQUIRED_CHECKS, scorePredictions, digest, validateConfig } from './evaluator.mjs';
+import { canonical, decide, REQUIRED_CHECKS, scorePredictions, digest, validateConfig } from './evaluator.mjs';
+import { target as packagedTarget } from './target.mjs';
 
 const title = { titleWeight: 1, textWeight: 0, tagWeight: 0 };
 const body = { titleWeight: 0, textWeight: 1, tagWeight: 0 };
@@ -32,6 +33,7 @@ function setup(t, fixture = target()) {
   return { directory, journal, options, loop, changeSource: () => { sourceHash = digest('changed-source'); } };
 }
 const checks = () => Object.fromEntries(REQUIRED_CHECKS.map(key => [key, 'PASS']));
+const review = (proposal, action = 'APPROVE') => ({ projectId: 'test-project', runId: proposal.id, proposalHash: proposal.proposalHash, action });
 
 test('admission requires every validator; telemetry cannot create permission', () => {
   for (const key of REQUIRED_CHECKS) for (const status of ['SKIPPED', 'ERROR', 'FAIL', undefined]) {
@@ -61,7 +63,7 @@ test('comma-containing keys cannot impersonate the exact configuration shape', (
     { ...body, extra: 0 }, { titleWeight: 0, textWeight: 1 }]) assert.throws(() => validateConfig(invalid), { code: 'RESEARCH_FIELDS_INVALID' });
 });
 
-test('real worker confirms a gain, commits only research configuration, and accounts for all trials', async t => {
+test('real worker stages a confirmed gain until the exact proposal is approved', async t => {
   const { loop, journal, directory } = setup(t), before = loop.snapshot().accepted;
   const real = loop.runner; let confirmationCalls = 0;
   loop.runner = async args => {
@@ -72,14 +74,48 @@ test('real worker confirms a gain, commits only research configuration, and acco
   assert.deepEqual(loop.snapshot().accepted, before);
   await loop.pending;
   const result = loop.snapshot(), run = result.runs[0];
-  assert.equal(run.decision, 'COMMIT'); assert.equal(result.accepted.version, 1); assert.deepEqual(result.accepted.config, body);
+  assert.equal(run.decision, 'ESCALATE'); assert.equal(run.reason, 'OWNER_REVIEW_REQUIRED');
+  assert.deepEqual(result.accepted, before); assert.equal(result.pendingReviews[0].proposalHash, run.proposalHash);
   assert.equal(confirmationCalls, 2); assert.equal(run.development.baseline.accuracy, 0); assert.equal(run.confirmation.candidate.accuracy, 1);
   assert.equal(run.completedTrials, 3); assert.equal(run.resources.inputTokens, 0); assert.equal(run.resources.outputTokens, 0);
   assert.equal(run.resources.energyKwh, null); assert.equal(run.resources.providerCostUsd, '0'); assert.ok(run.resources.resultBytes > 0);
   assert.equal(journal.snapshot().researchRuns.length, 1); assert.equal(journal.snapshot().runs.length, 0, 'research is not double-counted as model usage');
   assert.equal(journal.snapshot().researchRuns[0].completedTrials, 3);
   assert.deepEqual(fs.readdirSync(directory).sort(), ['research-loop.sqlite', 'resource-accounting.sqlite']);
-  assert.equal(result.events.filter(e => e.type === 'run-finish' && e.data.decision === 'COMMIT').length, 1);
+  assert.equal(journal.snapshot().researchRuns[0].decision, 'ESCALATE');
+  assert.throws(() => loop.review(review(run), 'bridge'), { code: 'RESEARCH_REVIEW_AUTHORITY_REQUIRED' });
+  assert.throws(() => loop.review({ ...review(run), proposalHash: digest('forged') }, 'local-owner'), { code: 'RESEARCH_PROPOSAL_MISMATCH' });
+  const approved = loop.review(review(run), 'local-owner');
+  assert.equal(approved.runs[0].review.decision, 'COMMIT'); assert.equal(approved.accepted.version, 1);
+  assert.deepEqual(approved.accepted.config, body); assert.deepEqual(approved.pendingReviews, []);
+  assert.deepEqual(loop.review(review(run), 'local-owner'), approved);
+  assert.throws(() => loop.review(review(run, 'DECLINE'), 'local-owner'), { code: 'RESEARCH_REVIEW_CONFLICT' });
+  assert.equal(approved.events.filter(e => e.data.decision === 'COMMIT').length, 1);
+  assert.equal(approved.events.at(-1).type, 'run-review');
+});
+
+test('declining a confirmed proposal retains the accepted settings', async t => {
+  const { loop } = setup(t), before = loop.snapshot().accepted;
+  loop.start(input()); await loop.pending;
+  const proposal = loop.snapshot().pendingReviews[0];
+  const declined = loop.review(review(proposal, 'DECLINE'), 'local-owner');
+  assert.equal(declined.runs[0].review.reason, 'OWNER_DECLINED');
+  assert.equal(declined.runs[0].review.decision, 'REJECT');
+  assert.deepEqual(declined.accepted, before); assert.deepEqual(declined.pendingReviews, []);
+});
+
+test('a competing approved proposal invalidates an older accepted-state binding', async t => {
+  const { loop } = setup(t);
+  loop.start(input({ maxTrials: 1 })); await loop.pending;
+  const first = loop.snapshot().pendingReviews[0];
+  loop.start(input()); await loop.pending;
+  const second = loop.snapshot().pendingReviews[0];
+  assert.notEqual(first.id, second.id);
+  const approved = loop.review(review(second), 'local-owner');
+  const stale = loop.review(review(first), 'local-owner');
+  assert.equal(stale.runs.find(run => run.id === first.id).review.reason, 'SOURCE_OR_ACCEPTED_STATE_CHANGED');
+  assert.equal(stale.runs.find(run => run.id === first.id).review.decision, 'ESCALATE');
+  assert.deepEqual(stale.accepted, approved.accepted);
 });
 
 test('a development gain that fails independent confirmation leaves accepted state unchanged', async t => {
@@ -163,14 +199,22 @@ test('slow accounting cannot report completed work when the final deadline check
 });
 
 test('a lost terminal receipt retains known consumption and marks outcome uncertain', async t => {
-  const { loop, journal } = setup(t), append = journal.append.bind(journal);
+  const { loop, journal, options } = setup(t), append = journal.append.bind(journal), before = loop.snapshot().accepted;
   journal.append = (key, type, data) => { if (type === 'research-outcome') throw new Error('disk full'); return append(key, type, data); };
   loop.start(input()); await loop.pending;
-  assert.equal(loop.snapshot().runs[0].decision, 'COMMIT');
+  assert.equal(loop.snapshot().runs[0].decision, 'ESCALATE');
   const receipt = journal.snapshot().researchRuns[0];
   assert.equal(receipt.status, 'OUTCOME_UNCERTAIN'); assert.equal(receipt.elapsedMs, null);
   assert.equal(receipt.resources.inputTokens, 0); assert.ok(receipt.resources.resultBytes > 0);
   assert.equal(loop.snapshot().degraded, true);
+  await loop.close();
+  const reopenedJournal = new ResourceJournal(options.directory, options.app, options.projectId);
+  const restarted = new ResearchLoop({ ...options, resourceJournal: reopenedJournal });
+  try {
+    const proposal = restarted.snapshot().pendingReviews[0];
+    assert.throws(() => restarted.review(review(proposal), 'local-owner'), { code: 'RESEARCH_ACCOUNTING_UNAVAILABLE' });
+    assert.deepEqual(restarted.snapshot().accepted, before);
+  } finally { await restarted.close(); reopenedJournal.close(); }
 });
 
 test('invalid budgets, project identity and extra governance fields cannot start work', async t => {
@@ -190,7 +234,7 @@ test('a forged worker output cannot authorize an improvement', async t => {
 test('restart preserves accepted state and never resumes interrupted work', async t => {
   const { loop, options, journal } = setup(t);
   loop.start(input()); await loop.pending; const accepted = loop.snapshot().accepted;
-  loop.append('run-start', { id: 'interrupted', requestId: 'interrupted-id', requestHash: digest('interrupted'), startedAt: new Date().toISOString() });
+  loop.append('run-start', { id: 'interrupted', requestId: 'interrupted-id', requestHash: digest('interrupted'), startedAt: new Date().toISOString(), policyHash: loop.policyHash });
   journal.append('research:interrupted:start', 'research-start', { id: 'interrupted', targetId: 'test-retrieval', startedAt: new Date().toISOString() });
   await loop.close();
   const restarted = new ResearchLoop(options);
@@ -198,7 +242,51 @@ test('restart preserves accepted state and never resumes interrupted work', asyn
     assert.deepEqual(restarted.snapshot().accepted, accepted); assert.equal(restarted.snapshot().active, null);
     assert.equal(restarted.snapshot().runs[0].status, 'INTERRUPTED'); assert.equal(restarted.pending, null);
     assert.equal(journal.snapshot().researchRuns.at(-1).status, 'UNCERTAIN');
+    const proposal = restarted.snapshot().pendingReviews[0];
+    assert.equal(restarted.review(review(proposal), 'local-owner').accepted.version, 1);
   } finally { await restarted.close(); }
+});
+
+test('the known pilot ledger retains its accepted state and prevents downgrade writes', async t => {
+  const app = packagedTarget.id.startsWith('qimovi') ? 'qimovi' : 'qiscreenwrite';
+  const policyHash = app === 'qimovi' ? '8082c29bf3a398ebf81c5db020ca873c8375e1dfeac2ecff99425ff3ef5b26bf'
+    : '3909e5198023fe682fb0d91d2df52b6bab71f067e6cfc03ec8d86eb7bd2ca512';
+  const { id: targetId, documents, development, confirmation, baseline } = packagedTarget;
+  const datasetHash = digest({ documents, development, confirmation });
+  const stateHash = (config, version) => digest({ config, version, targetId, datasetHash, policyHash });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'qi-research-pilot-upgrade-'));
+  const projectId = 'test-project', journal = new ResourceJournal(directory, app, projectId);
+  t.after(() => { journal.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  const filename = path.join(directory, 'research-loop.sqlite');
+  fs.closeSync(fs.openSync(filename, 'wx', 0o600));
+  const db = new DatabaseSync(filename);
+  db.exec('CREATE TABLE research_events(sequence INTEGER PRIMARY KEY, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL, payload TEXT NOT NULL)');
+  const original = [
+    ['initialize', { targetId, datasetHash, policyHash, evaluatorHash: '6db516c0db87581a0a075f981abd0014c0b17ba4f4d705f3dc6148adf0e6a22c' }],
+    ['run-start', { id: 'previous-run', policyHash }],
+    ['run-finish', { id: 'previous-run', decision: 'COMMIT', checks: checks(), confirmedImprovement: true, config: body,
+      preStateHash: stateHash(baseline, 0), postStateHash: stateHash(body, 1) }],
+  ];
+  let previousHash = '0'.repeat(64);
+  for (const [index, [type, data]] of original.entries()) {
+    const sequence = index + 1, payload = canonical({ app, projectId, type, data, at: '2026-11-06T00:00:00.000Z' });
+    const hash = digest(`${sequence}\n${previousHash}\n${payload}`);
+    db.prepare('INSERT INTO research_events VALUES (?,?,?,?)').run(sequence, previousHash, hash, payload);
+    previousHash = hash;
+  }
+  db.close();
+
+  const options = { directory, app, projectId, target: packagedTarget, resourceJournal: journal, readSourceHash: () => digest('source') };
+  const upgraded = new ResearchLoop(options);
+  try {
+    const { accepted, events } = upgraded.export();
+    assert.deepEqual(accepted, { config: body, version: 1, hash: stateHash(body, 1) });
+    assert.deepEqual(events.slice(0, 3).map(({ type, data }) => [type, data]), original);
+    assert.equal(events.at(-1).type, 'policy-activate');
+    assert.throws(() => upgraded.append('run-start', { id: 'old-binary', policyHash }), /RESEARCH_OWNER_REVIEW_REQUIRED/);
+  } finally { await upgraded.close(); }
+  const reopened = new ResearchLoop(options);
+  try { assert.equal(reopened.export().events.length, 4); } finally { await reopened.close(); }
 });
 
 test('journal corruption and evaluator-contract change degrade research without bypassing admission', async t => {
@@ -207,6 +295,8 @@ test('journal corruption and evaluator-contract change degrade research without 
   assert.throws(() => new ResearchLoop({ ...options, target: changed }), { code: 'RESEARCH_POLICY_CHANGED' });
   const db = new DatabaseSync(path.join(directory, 'research-loop.sqlite'));
   assert.throws(() => db.exec('DELETE FROM research_events'), /RESEARCH_APPEND_ONLY/);
+  assert.throws(() => db.prepare('INSERT INTO research_events VALUES (2, ?, ?, ?)').run('prev', 'hash',
+    JSON.stringify({ type: 'run-finish', data: { decision: 'COMMIT' } })), /RESEARCH_OWNER_REVIEW_REQUIRED/);
   db.exec('DROP TRIGGER research_no_update'); db.prepare('UPDATE research_events SET payload=? WHERE sequence=1').run('{}'); db.close();
   const degraded = openResearchLoop(options);
   assert.equal(degraded.snapshot().degraded, true); assert.equal(degraded.snapshot().accepted, null);
